@@ -1,0 +1,543 @@
+---
+title: "Introduction to the martingalebot package in R"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to the martingalebot package in R}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+library(martingalebot)
+```
+
+The `martingalebot` package provides functions to download
+cryptocurrency price data from Binance and to perform backtesting and
+parameter optimization for a single pair martingale trading strategy as
+implemented by single pair dca bots on [3commas](https://3commas.io/),
+[Pionex](https://www.pionex.com/),
+[TradeSanta](https://tradesanta.com/), [Mizar](https://mizar.com/),
+[OKX](https://www.okx.com/learn/introducing-the-spot-dollar-cost-averaging-dca-bot),
+[Bitget](https://www.bitget.com/en/academy/article-details/Bitget-DCA-Strategy-A-Hands-on-Tutorial)
+and others.
+
+### Downloading price data
+
+There are three different functions to download data from Binance:
+`get_binance_klines(),` `get_binance_klines_from_csv()`,
+`get_binance_prices_from_csv`. The function `get_binance_klines()` can
+download candlestick data directly. The user can specify the trading
+pair, the start and end time and the time frame for the candles. For
+example, to download hourly candles from `ETHUSDT` from the first of
+January to the first of March 2023, one could specify:
+
+```{r}
+get_binance_klines(symbol = 'ETHUSDT',
+                   start_time = '2023-01-01',
+                   end_time = '2023-03-01',
+                   interval = '1h')
+```
+
+An advantage of `get_binance_klines()` is that it can download price
+data up to the current time. A disadvantage is that the lowest time
+frame for the candles is 1 minute.
+
+The function `get_binance_klines_from_csv()` downloads candlestick data
+via csv files from <https://data.binance.vision/>. The advantage of this
+method is that it is faster for large amounts of data and that that the
+lowest time frame for the candles is 1 second. A disadvantage is that it
+can only download price data up to 1-2 days ago as the csv files on
+[https://data.binance.vision](https://data.binance.vision/) are only
+updated once per day.
+
+The function `get_binance_prices_from_csv()` also downloads price data
+via csv files from <https://data.binance.vision/> and thus shares the
+same advantages and disadvantages, but it downloads aggregated trades
+instead of candlestick data. This allows for an even lower time
+resolution as it returns all traded prices of a coin over time. Knowing
+the exact price at each point in time is particularly helpful for
+backtesting martingale bots with trailing buy and sell orders. The
+function `get_binance_prices_from_csv()` returns a data frame with only
+two columns. See, for example:
+
+```{r}
+get_binance_prices_from_csv('LTCBTC',
+                            start_time = '2023-01-01',
+                            end_time = '2023-02-01', progressbar = F)
+```
+
+Since this function returns very large amounts of data for frequently
+traded pairs such as `BTCUSDT`, it is, by default, parallelized and
+shows a progress bar. Currently, the functions `backtest` and
+`grid_search` are implemented in such a way that they expect the price
+data to be in the format as returned by this function.
+
+### Performing a backtest
+
+To perform a backtest of a martingale bot, we first download price data
+for a specific time period and trading pair with
+`get_binance_prices_from_csv()` and then apply `backtest` to it. The
+tested martingale bot can be set up with the following parameters:
+
+-   `base_order_volume`: The size of the base order (in the quote
+    currency)
+
+-   `first_safety_order_volume`: The size of the first safety order (in
+    the quote currency)
+
+-   `n_safety_orders`: The maximum number of safety orders
+
+-   `pricescale`: Price deviation to open safety orders (% from initial
+    order)
+
+-   `volumescale`: With what number should the funds used by the last
+    safety order be multiplied?
+
+-   `take_profit`: At what percentage in profit should the bot close the
+    deal?
+
+-   `stepscale`: With what number should the price deviation percentage
+    used by the last safety order be multiplied.
+
+-   `stoploss`: At what percentage of draw down should a stop-loss be
+    triggered? If set to zero (default), a stop-loss will never be
+    triggered.
+
+-   `start_asap`: Should new deals be started immediately after the
+    previous deal was closed. If set to `FALSE` new deals are only
+    started where the logical vector `deal_start` in `data` is `TRUE`.
+
+If we don't specify any of these arguments, the default parameter
+settings will be used. To show the default settings, type
+`args(backtest)` or go to the help file with `?backtest`.
+
+```{r, warning=FALSE}
+dat <- get_binance_prices_from_csv('PYRUSDT',
+                                   start_time = '2022-12-01',
+                                   end_time = '2023-03-01', 
+                                   progressbar = F)
+backtest(data = dat)
+```
+
+The backtest function returns the following measures:
+
+-   `profit`: The percentage of profit the bot made during the tested
+    time period.
+
+-   `n_trades`: The number of deals (cycles) that have been closed.
+
+-   `max_draw_down`: The biggest draw down in percent hat occurred.
+
+-   `required_capital`: How much capital is needed to run a bot with the
+    used parameter settings.
+
+-   `covered deviation`: The percentage price deviation from the initial
+    order to the last safety order.
+
+-   `down_tolerance`: The percentage price deviation from the initial
+    order price to the take profit price when all safety orders are used
+    up.
+
+-   `max_time`: The maximum number of days the bot was in a stuck
+    position (maximum number of days of being fully invested).
+
+-   `percent_inactive`: The percentage of time the bot was in a stuck
+    position. That is, all safety orders were filled and the bot was
+    fully invested.
+
+-   `n_stoploss`: The number of stop-losses that had been triggered.
+
+If the argument `plot` is `TRUE`, an interactive plot showing the
+changes in capital and price of the traded cryptocurrency over time is
+produced. Buys, sells and stop-losses are displayed as red, green and
+blue dots, respectively.
+
+```{r, include = F}
+library(tidyverse)
+library(optimization)
+library(GA)
+backtest(data = dat, plot = T)
+```
+
+```{r, fig.height=12}
+backtest(data = dat, plot = T)
+```
+
+### Deal start conditions
+
+By default, new trades are started as soon as possible. If the price
+data set contains a logical vector `deal_start` and the argument
+`start_asap` is set to `FALSE`, new deals are only started where the
+logical vector `deal_start` in `data` is `TRUE`. We can add the Relative
+Strength Index (RSI) as a deal start condition to the data by using the
+function `add_rsi`. We can specify the time frame for the candles, the
+number of candles that are considered and the cutoff for creating the
+logical vector `deal_start`. In the following example, new deals are
+only started if the hourly RSI is below 30. You can see in the plot that
+there are no buys (red dots) at peaks of the price curve anymore.
+However, the performance is slightly worse because there are now less
+trades in total.
+
+```{r}
+dat2 <- add_rsi(dat, time_period = "1 hour", n = 7, cutoff = 30)
+backtest(data = dat2, start_asap = F, plot = T)
+```
+
+### Parameter optimization
+
+To find the best parameter set for a given time period, we can perform a
+grid search using the function `grid_search`. This function takes
+possible values of martingale bot parameters, runs the function
+`backtest` with each possible combination of these values and returns
+the results as a date frame. Each row of this data frame contains the
+result of one possible combination of parameters. Since doing a grid
+search can be computationally expensive, the `grid_search` function is
+parallelized by default.
+
+By default, `grid_search` uses a broad range of parameters. For example,
+for `n_safety_orders`, values between 6 and 16 in steps of 2 are tested
+(see `args(grid_search)`for default ranges of parameters). However, we
+could also use, for, examples, values between 4 and 6, by explicitly
+specifying it:
+
+```{r}
+res <- grid_search(data = dat, n_safety_orders = 4:6, progressbar = F)
+res
+```
+
+The rows of the returned data frame are ordered by the column `profit`.
+In the first row, we see the set of parameters that led to highest
+profit. In order to plot the best performing parameter set, we can pass
+the values of the first row in `res` as arguments to `backtest` by using
+the function `do.call`.
+
+```{r}
+do.call(backtest, c(as.list(res[1,]), list(data = dat, plot = T)))
+```
+
+Alternatively, we could do this more elegantly with the `tidyverse`
+package.
+
+```{r, eval = F}
+library(tidyverse)
+grid_search(data = dat, n_safety_orders = 4:6, progressbar = F) %>% 
+  slice(1) %>% 
+  pmap_df(backtest, data = dat, plot = T)
+```
+
+Instead of picking the most profitable parameter constellation, we could
+also pick the one with the best compromise between `profit` and
+`max_draw_down` by replacing the command `slice(1)` with
+`slice_max(profit - max_draw_down)`.
+
+It should be noted that the `grid_search` function also has the
+following arguments that allow to restrict the search space:
+
+-   `min_covered_deviation`: the minimum percentage price deviation from
+    the initial order to the last safety order a given parameter
+    combination must have. Parameter combinations that have a covered
+    price deviation less than this value are discarded and not tested.
+
+-   `min_down_tolerance`: the minimum price down tolerance (i.e.
+    percentage price deviation from the initial order price to the take
+    profit price when all safety orders are filled) a given parameter
+    combination must have. Parameter combinations that have a price down
+    tolerance less than this value are discarded and not tested.
+
+-   `max_required_capital`: the maximum capital a given parameter
+    combination can require. Parameters that require more capital than
+    this value are discarded and not tested.
+
+This can be handy because we might only want to search for optimal
+parameter combinations within a set of parameters that have minimum
+"down tolerance" and thus have certain robustness against sudden price
+drops. In this case, it would be a waste of computation time if we
+tested all possible combinations of parameters.
+
+Instead of performing a grid search, we can also search for the best
+parameter combination with optimization algorithms. For example, we
+could use a technique called Simulated Annealing:
+
+```{r}
+library(optimization)
+
+#Define the optimization function:
+optim_fun <- function(x) {
+      y <- backtest(n_safety_orders = x[1], pricescale = x[2],
+                    volumescale = x[3], take_profit = x[4], stepscale = x[5],
+                    data = dat)
+      #Note that we return minus the profit because the optimization algorithm
+      #expects a value that we want to reduce as much as possible
+      - y$profit
+}
+
+#Define lower and upper bound and start values of parameters
+lower <- c(6, 1, 1, 1, 0.8)
+upper <- c(16, 3.5, 2, 3.5, 1.1)
+start <- c(8, 2.4, 1.5, 2.4, 1)
+
+#Perform optimization
+res <- optim_sa(optim_fun, start = start, lower = lower, upper = upper,
+                control = list(nlimit = 200))$par
+
+#Plot the best parameter combination found by the optimization algorithm:
+backtest(n_safety_orders = round(res[1]), pricescale = res[2],
+         volumescale = res[3], take_profit = res[4], stepscale = res[5],
+         data = dat, plot = T)
+```
+
+Instead of optimizing the profit, we could also optimize another
+criterion. For example, we could seek for the best compromise between
+`profit`, `max_draw_down`, `time_inactive`, and `down_tolerance` by
+defining the optimization function like this:
+
+```{r}
+optim_fun <- function(x) {
+      y <- backtest(n_safety_orders = x[1], pricescale = x[2],
+                    volumescale = x[3], take_profit = x[4], stepscale = x[5],
+                    data = dat)
+      with(y, max_draw_down + time_inactive - down_tolerance - profit)
+}
+```
+
+Here, all measures are weighted equally. However, we could also give
+them different weights by multiplying them with different numbers or we
+could apply various transformation functions to them.
+
+We could also perform an optimization using the genetic algorithm from
+package `GA`. Here's an example:
+
+```{r, message=FALSE}
+library(GA)
+
+#Define the optimization function:
+optim_fun <- function(x) {
+      y <- backtest(n_safety_orders = x[1], pricescale = x[2],
+                    volumescale = x[3], take_profit = x[4], stepscale = x[5],
+                    data = dat)
+      #Note that this algorithm expects a value that we want to increase as much
+      #as possible. Therefore, we return the positive profit here:
+      y$profit
+}
+
+#Define lower and upper bound of parameters
+lower <- c(6, 1, 1, 1, 0.8)
+upper <- c(16, 3.5, 2, 3.5, 1.1)
+
+#Perform optimization
+res <- ga(type = 'real-valued', optim_fun, lower = lower,
+          upper = upper, maxiter = 200)@solution
+
+#Plot the best parameter combination found by the optimization algorithm:
+backtest(n_safety_orders = round(res[1]), pricescale = res[2],
+         volumescale = res[3], take_profit = res[4], stepscale = res[5],
+         data = dat, plot = T)
+```
+
+### Cross-validation
+
+In the previous examples, we used the same data for training and testing
+the algorithm. However, this most likely resulted in over-fitting and
+over-optimistic performance estimation. A better strategy would be to
+strictly separate testing and learning by using cross-validation.
+
+We first download a longer time period of price data so that we have
+more data for training and testing:
+
+```{r}
+dat <- get_binance_prices_from_csv("ATOMUSDT", 
+                                   start_time = '2022-01-01',
+                                   end_time = '2023-03-03', progressbar = F)
+```
+
+Next, we split our data into many different test and training time
+periods. We can use the function `create_timeslices` to create start and
+end times of the different splits. It has the following 4 arguments.
+
+-   `train_months` The duration of the training periods in months
+
+-   `test_month` The duration of the testing periods in months
+
+-   `shift_months` The number of months pairs of test and training
+    periods are shifted to each other. The smaller this number the more
+    pairs of test and training data sets can be created
+
+-   `data` The price data set
+
+For example, if we want to use 4 months for training, 4 months for
+testing and create training and testing periods every month, we could
+specify:
+
+```{r}
+slices <- create_timeslices(train_months = 4, test_months = 4,
+                            shift_months = 1, data = dat)
+slices
+```
+
+Note that these time periods are partially overlapping. If we want to
+have non-overlapping time periods, we could specify `shift_months = 4`.
+
+We can now perform cross-validation by iterating over the rows of
+`slices`. At each iteration, we perform a grid search for the best
+parameter combination using the training data and then apply this
+parameter combination to the test data. For simplicity, we only return
+the final performance in the test data.
+
+```{r, message=F}
+library(tidyverse)
+slices %>% 
+  group_by(start_test, end_test) %>% 
+  summarise({
+    #Get test and training data of the present row / iteration
+    train_data <- filter(dat, between(time, start_train, end_train))
+    test_data <- filter(dat, between(time, start_test, end_test))
+    #Find the best parameter combination in the training data
+    best <- grid_search(data = train_data, progressbar = F)[1,]
+    #Apply this parameter combination to the test data
+    pmap_df(best, backtest, data = test_data)
+  })
+```
+
+We can see that only 3 of the 7 tested time periods were in profit. This
+is because we only maximized profitability during training, which likely
+led to the selection of "aggressive" or risky strategies that work well
+in the training set but poorly in the test set due to little robustness
+against sudden price drops. This is illustrated by the the relatively
+small price down tolerance, which varied between 8.2 and 10.9 % for the
+selected parameter combinations (see column `down_tolerance` in the
+above table). A potential solution to this problem is therefore to
+restrict the search space to those parameter combinations that have a
+minimum price down tolerance of, for example, 12 %. We can do this by
+using the argument `min_down_tolerance` of the `grid_search` function:
+
+```{r, warning=F, message=FALSE}
+library(tidyverse)
+slices %>% 
+  group_by(start_test, end_test) %>% 
+  summarise({
+    train_data <- filter(dat, between(time, start_train, end_train))
+    test_data <- filter(dat, between(time, start_test, end_test))
+    best <- grid_search(data = train_data, min_down_tolerance = 12,
+                        progressbar = F)[1,]
+    pmap_df(best, backtest, data = test_data)
+  })
+```
+
+Except for the first time period, all time periods are now in profit.
+However, this more conservative strategy came with the price of slightly
+lower profits in the second and third time periods.
+
+Alternatively, we could also select the most profitable parameter
+combination only among those combinations that had little draw down and
+did not result in "red bags" for extended periods of time. For example,
+to select the most profitable parameter combination among those
+combinations that had no more than 30% draw down and that were no longer
+than 3% of the time fully invested in the training period, we could do:
+
+```{r, warning=F, message=F}
+library(tidyverse)
+slices %>% 
+  group_by(start_test, end_test) %>% 
+  summarise({
+    train_data <- filter(dat, between(time, start_train, end_train))
+    test_data <- filter(dat, between(time, start_test, end_test))
+    best <- grid_search(data = train_data, progressbar = F) %>% 
+      filter(max_draw_down < 30 & percent_inactive < 3) %>% 
+      slice(1)
+    pmap_df(best, backtest, data = test_data)
+  })
+```
+
+Another option would be to select the parameter combination that
+maximizes a combination of measures, such as
+`profit - max_draw_down - percent_inactive` .
+
+```{r, warning=F, message=FALSE}
+library(tidyverse)
+slices %>% 
+  group_by(start_test, end_test) %>% 
+  summarise({
+    train_data <- filter(dat, between(time, start_train, end_train))
+    test_data <- filter(dat, between(time, start_test, end_test))
+    best <- grid_search(data = train_data, progressbar = F) %>% 
+      slice_max(profit - max_draw_down - percent_inactive)
+    pmap_df(best, backtest, data = test_data)
+  })
+```
+
+Instead of performing a grid search, we could also search for the best
+parameter combination using an optimiziation algorithm, such as
+simulated annealing:
+
+```{r, message = F}
+library(tidyverse)
+slices %>% 
+  group_by(start_test, end_test) %>% 
+  summarise({
+    train_data <- filter(dat, between(time, start_train, end_train))
+    test_data <- filter(dat, between(time, start_test, end_test))
+    
+    #Define the optimization function:
+    optim_fun <- function(x) {
+      y <- backtest(n_safety_orders = x[1], pricescale = x[2],
+                      volumescale = x[3], take_profit = x[4], stepscale = x[5],
+                      data = train_data)
+      #Note that we have to change signs here as compared to above
+      with(y, -profit + max_draw_down + percent_inactive)
+    }
+
+    #Define lower and upper bound and start values of parameters
+    lower <- c(6, 1, 1, 1, 0.8)
+    upper <- c(16, 3.5, 2, 3.5, 1.1)
+    start <- c(8, 2.4, 1.5, 2.4, 1)
+
+    #Perform optimization
+    res <- optim_sa(optim_fun, start = start, lower = lower, upper = upper,
+                    control = list(nlimit = 200))$par
+
+    #Apply best parameter combination to test data
+    backtest(n_safety_orders = round(res[1]), pricescale = res[2],
+             volumescale = res[3], take_profit = res[4], stepscale = res[5],
+             data = test_data)
+  })
+```
+
+Similarly, we could apply the genetic algorithm from package `GA`:
+
+```{r, message = F}
+library(tidyverse)
+slices %>% 
+  group_by(start_test, end_test) %>% 
+  summarise({
+    train_data <- filter(dat, between(time, start_train, end_train))
+    test_data <- filter(dat, between(time, start_test, end_test))
+    
+    #Define the optimization function:
+    optim_fun <- function(x) {
+      y <- backtest(n_safety_orders = x[1], pricescale = x[2],
+                      volumescale = x[3], take_profit = x[4], stepscale = x[5],
+                      data = train_data)
+      with(y, profit - max_draw_down - percent_inactive)
+    }
+
+    #Define lower and upper bound of parameters
+    lower <- c(6, 1, 1, 1, 0.8)
+    upper <- c(16, 3.5, 2, 3.5, 1.1)
+
+    #Perform optimization
+    res <- ga(type = 'real-valued', optim_fun, lower = lower,
+              upper = upper, maxiter = 200, monitor = F)@solution
+
+    #Apply best parameter combination to test data
+    backtest(n_safety_orders = round(res[1]), pricescale = res[2],
+             volumescale = res[3], take_profit = res[4], stepscale = res[5],
+             data = test_data)
+  })
+```

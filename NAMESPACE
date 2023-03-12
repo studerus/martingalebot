@@ -1,0 +1,4 @@
+exportPattern("^[[:alpha:]]+")
+importFrom(Rcpp, evalCpp)
+importFrom(data.table, .N, .I, ':=')
+useDynLib(martingalebot, .registration = TRUE)
