@@ -52,9 +52,8 @@ library(martingalebot)
 # Download recent price data for ETHUSDT
 data <- get_binance_prices_from_csv(
   symbol = "ETHUSDT",
-  start_time = "2024-01-01", 
-  end_time = "2024-02-01",
-  progressbar = FALSE
+  start_time = "2025-01-01", 
+  end_time = "2025-02-01"
 )
 
 head(data)
@@ -70,8 +69,8 @@ print(results)
 # Backtest with custom parameters
 results <- backtest(
   data = data,
-  base_order_volume = 100,
-  first_safety_order_volume = 200,
+  base_order_volume = 50,
+  first_safety_order_volume = 50,
   n_safety_orders = 8,
   pricescale = 2.5,
   take_profit = 2.0,
@@ -87,8 +86,7 @@ optimization_results <- grid_search(
   data = data,
   n_safety_orders = 6:10,
   pricescale = c(2.0, 2.5, 3.0),
-  take_profit = c(1.5, 2.0, 2.5),
-  progressbar = FALSE
+  take_profit = c(1.5, 2.0, 2.5)
 )
 
 # View best performing parameters
@@ -113,7 +111,7 @@ cv_results <- slices %>%
     train_data <- filter(data, between(time, start_train, end_train))
     test_data <- filter(data, between(time, start_test, end_test))
     
-    best_params <- grid_search(data = train_data, progressbar = FALSE)[1,]
+    best_params <- grid_search(data = train_data)[1,]
     pmap_df(best_params, backtest, data = test_data)
   })
 ```
@@ -124,13 +122,13 @@ The martingale strategy can be customized with the following parameters:
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `base_order_volume` | Initial order size (quote currency) | 100 |
-| `first_safety_order_volume` | First safety order size | 200 |
+| `base_order_volume` | Initial order size (quote currency) | 10 |
+| `first_safety_order_volume` | First safety order size | 10 |
 | `n_safety_orders` | Maximum number of safety orders | 8 |
 | `pricescale` | Price deviation for safety orders (%) | 2.4 |
 | `volumescale` | Volume multiplier for safety orders | 1.5 |
 | `take_profit` | Profit target (%) | 2.4 |
-| `stepscale` | Price deviation multiplier | 1.0 |
+| `stepscale` | Price deviation multiplier | 1 |
 | `stoploss` | Stop loss threshold (%) | 0 (disabled) |
 
 ## Performance Metrics
@@ -225,7 +223,7 @@ If you use this package in your research, please cite:
 @Manual{,
   title = {martingalebot: Martingale Trading Strategy Backtesting},
   author = {[Author Name]},
-  year = {2024},
+  year = {2025},
   note = {R package version 0.1.0},
   url = {https://github.com/studerus/martingalebot},
 }
