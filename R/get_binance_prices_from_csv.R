@@ -7,8 +7,8 @@
 #' @param start_time,end_time an object of class `date` or `POSIXct`
 #' or `POSIXt` or a character string that can be converted to these classes
 #' @param spot whether to download spot of futures trading data
-#' @param interval the interval for aggregating the data. 1 (default)
-#' corresponds to 1 second, 60 corresponds to 1 minute etc.
+#' @param interval the interval for aggregating the data. "second" (default)
+#' corresponds to 1 second, "minute" to 1 minute etc.
 #' @param aggregated whether to aggregate the price data or not. If TRUE a
 #' columns with the highest and lowest prices for the chosen time interval is
 #' added.
@@ -31,7 +31,7 @@
 get_binance_prices_from_csv <- function(symbol = "PYRUSDT",
               start_time = Sys.time() - lubridate::dmonths(2),
               end_time = Sys.time() - lubridate::ddays(2),
-              spot = TRUE, interval = 1L, aggregated = FALSE,
+              spot = TRUE, interval = "second", aggregated = FALSE,
               processing = "multisession", ncores = parallel::detectCores(),
               progressbar = TRUE) {
   tz <- Sys.timezone()
@@ -66,7 +66,8 @@ get_binance_prices_from_csv <- function(symbol = "PYRUSDT",
                                   complete = "+")))
     p <- progressr::progressor(along = urls)
   } else {
-    p <- function() {}
+    p <- local(function(...) NULL)
+    environment(p) <- new.env(parent = emptyenv())
   }
   furrr::future_map_dfr(urls, ~ {
     options(timeout = 3600)
@@ -74,18 +75,21 @@ get_binance_prices_from_csv <- function(symbol = "PYRUSDT",
     download.file(.x, tf, quiet = T, method = "libcurl")
     csv <- unzip(tf, exdir = dirname(tf))
     file.remove(tf)
-    dat <- data.table::fread(csv, select = c(6, 2),
+    dat <- data.table::fread(csv[1], select = c(6, 2),
                              col.names = c("time", "price"), nThread = 1)
     file.remove(csv)
+    if (dat$time[1] > 1e14) {
+      div <- 1e6
+    } else {
+      div <- 1e3
+    }
+    dat[, time := lubridate::as_datetime(as.numeric(time) %/% div, tz = tz)]
     if (aggregated) {
-      dat[, time := lubridate::as_datetime(as.integer(time %/% 1000 %/%
-                            interval * interval), tz = tz)]
+      dat[, time := lubridate::floor_date(time, unit = interval)]
       dat <- dat[, by = time, .(price = mean(price), min_price = min(price),
                                 max_price = max(price))]
     } else {
       dat <- dat[!(price == dplyr::lag(price) & price == dplyr::lead(price))]
-      dat <- dat[, time := lubridate::as_datetime(as.integer(time %/% 1000),
-                                                  tz = tz)]
     }
     p()
     dat[time >= start_time & time <= end_time]

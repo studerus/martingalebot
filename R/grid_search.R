@@ -83,7 +83,8 @@ grid_search <- function(base_order_volume = 10,
     p <- progressr::progressor(steps = length(n_safety_orders) *
                                  length(pricescale))
   } else {
-    p <- function() {}
+    p <- local(function(...) NULL)
+    environment(p) <- new.env(parent = emptyenv())
   }
   options(future.rng.onMisuse = "ignore")
   if (processing == 'sequential') {

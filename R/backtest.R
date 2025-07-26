@@ -104,7 +104,7 @@ backtest <- function(base_order_volume = 10, first_safety_order_volume = 10,
       tibble::add_column(name = 'Price')
     stoplosses <- dplyr::filter(df, Price_Change < 0 & is.na(Bought)) |>
       tibble::add_column(name = 'Price')
-    p <- df |>
+    gg <- df |>
       dplyr::select(Time, Price, Capital) |>
       tidyr::pivot_longer(Price:Capital) |>
       ggplot2::ggplot(ggplot2::aes(y = value, x = Time)) +
@@ -118,7 +118,8 @@ backtest <- function(base_order_volume = 10, first_safety_order_volume = 10,
       ggplot2::facet_wrap(. ~ name, ncol = 1, scales = 'free') +
       ggplot2::labs(title = 'title', y = NULL, x = NULL) +
       tidyquant::theme_tq()
-    p <- plotly::ggplotly(p, height = if (interactive())  NULL else 700) |>
+
+    p <- plotly::ggplotly(gg, height = if (interactive())  NULL else 700) |>
       plotly::layout(margin = list(t = 100)) |>
       plotly::layout(title = list(text = paste0(
         'Bot profit: ', round(output[[1]]$profit, 1),

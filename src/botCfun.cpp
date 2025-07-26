@@ -20,7 +20,8 @@ List botCfun(double base_order_volume, double first_safety_order_volume,
   double highest_capital, lowest_capital, down_tolerance;
   double buy_price = 0, sell_price = R_PosInf, stoploss_price = 0;
   double base_order_price = price[0], current_invested, current_bought_coins;
-  double current_avg_price, time_inactive, max_trade_time;
+  double current_avg_price;
+  double time_inactive  = 0.0, max_trade_time = 0.0;
   double max_draw_down = 1, current_bottom = R_PosInf;
   double take_profit_factor, fee_factor = (100 - trading_fee) / 100;
   double stoploss_factor;
