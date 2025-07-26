@@ -190,7 +190,8 @@ ga_result <- ga(
 
 ## Documentation
 
-- **Vignette**: Comprehensive tutorial with examples (`vignette("Introduction", package = "martingalebot")`)
+- **📖 Online Vignette**: [Comprehensive tutorial with examples](https://studerus.github.io/martingalebot/) (recommended for best viewing experience)
+- **Vignette**: R package vignette (`vignette("Introduction", package = "martingalebot")`)
 - **Function documentation**: Help pages for all functions (`?backtest`, `?grid_search`, etc.)
 - **Examples**: Practical use cases in function documentation
 
