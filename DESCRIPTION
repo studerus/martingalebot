@@ -28,6 +28,7 @@ Imports:
     plotly,
     dtplyr,
     lhs,
+    DEoptim,
     Rcpp (>= 1.0.10)
 LinkingTo: Rcpp
 Roxygen: list(markdown = TRUE)

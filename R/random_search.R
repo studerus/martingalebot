@@ -82,8 +82,8 @@ random_search <- function(data,
 
   # 2. Scale the LHS matrix to the actual parameter bounds
   params <- tibble::tibble(
-    base_order_volume = floor(lhs_matrix[,1] * (base_order_volume_bounds[2] - base_order_volume_bounds[1] + 1) + base_order_volume_bounds[1]),
-    first_safety_order_volume = floor(lhs_matrix[,2] * (first_safety_order_volume_bounds[2] - first_safety_order_volume_bounds[1] + 1) + first_safety_order_volume_bounds[1]),
+    base_order_volume = lhs_matrix[,1] * (base_order_volume_bounds[2] - base_order_volume_bounds[1]) + base_order_volume_bounds[1],
+    first_safety_order_volume = lhs_matrix[,2] * (first_safety_order_volume_bounds[2] - first_safety_order_volume_bounds[1]) + first_safety_order_volume_bounds[1],
     n_safety_orders = floor(lhs_matrix[,3] * (n_safety_orders_bounds[2] - n_safety_orders_bounds[1] + 1) + n_safety_orders_bounds[1]),
     pricescale = lhs_matrix[,4] * (pricescale_bounds[2] - pricescale_bounds[1]) + pricescale_bounds[1],
     volumescale = lhs_matrix[,5] * (volumescale_bounds[2] - volumescale_bounds[1]) + volumescale_bounds[1],
