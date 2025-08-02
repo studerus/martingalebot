@@ -2,6 +2,6 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 botCfun <- function(base_order_volume, first_safety_order_volume, n_safety_orders, take_profit, pricescale, volumescale, pricemult, stoploss, trading_fee, show_trades, plot, start_asap, compound, price, date, deal_start) {
-    .Call('_martingalebot_botCfun', PACKAGE = 'martingalebot', base_order_volume, first_safety_order_volume, n_safety_orders, take_profit, pricescale, volumescale, pricemult, stoploss, trading_fee, show_trades, plot, start_asap, compound, price, date, deal_start)
+    .Call(`_martingalebot_botCfun`, base_order_volume, first_safety_order_volume, n_safety_orders, take_profit, pricescale, volumescale, pricemult, stoploss, trading_fee, show_trades, plot, start_asap, compound, price, date, deal_start)
 }
 

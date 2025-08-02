@@ -63,6 +63,8 @@
 #' performed buy and sell orders and stoplosses.
 #'
 #' @export
+#' @useDynLib martingalebot, .registration = TRUE
+#' @importFrom Rcpp sourceCpp
 #'
 #' @examples
 #' #Download some price data and perform backtesting
