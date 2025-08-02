@@ -7,7 +7,9 @@
 #' [OKX](https://www.okx.com/learn/introducing-the-spot-dollar-cost-averaging-dca-bot)
 #' and others. It is mostly written in C++ to maximize speed.
 #'
-#'
+#' @param data A `data.table` containing `time` and `price` columns. If the
+#' argument `start_asap` is set to `FALSE` and additional columns `deal_start`
+#' is required.
 #' @param base_order_volume The size of the base order (in the quote currency)
 #' @param first_safety_order_volume The size of the first safety order (in
 #' the quote currency)
@@ -28,9 +30,6 @@
 #' `deal_start` in `data` is TRUE.
 #' @param plot Whether to plot the results
 #' @param show_trades Whether to return a `data.frame` showing the first trades
-#' @param data A `data.table` containing `time` and `price` columns. If the
-#' argument `start_asap` is set to `FALSE` and additional columns `deal_start`
-#' is required.
 #' @param compound Whether to compound the profit or not. Default is `TRUE`.
 #' @param trading_fee The trading fee percentage. By default it is set to 0.075,
 #' which corresponds to the current trading fee on Binance if paid with BNB.
@@ -60,21 +59,24 @@
 #'
 #' If the argument `plot` is `TRUE` an interactive plot showing the changes in
 #' capital and price of the traded cryptocurrency over time as well as
+
 #' performed buy and sell orders and stoplosses.
 #'
 #' @export
 #'
 #' @examples
-#' #Download some price data
-#' dat <- get_binance_prices_from_csv('PYRUSDT', start_time = '2023-02-02',
-#'                                     progressbar = F)
-#'
-#' #Perform backtesting
-#' backtest(data = dat)
-backtest <- function(base_order_volume = 10, first_safety_order_volume = 10,
+#' #Download some price data and perform backtesting
+#' get_binance_prices_from_csv(
+#'   'PYRUSDT',
+#'    start_time = '2025-01-01',
+#'    end_time = '2025-03-01',
+#'    progressbar = F
+#' ) |>
+#' backtest()
+backtest <- function(data, base_order_volume = 10, first_safety_order_volume = 10,
                 n_safety_orders = 8, pricescale = 2.4, volumescale = 1.5,
                 take_profit = 2.4, stepscale = 1, stoploss = 0, start_asap = T,
-                plot = F, show_trades = F, data, compound = T,
+                plot = F, show_trades = F, compound = T,
                 trading_fee = 0.075, ...) {
   output <- botCfun(base_order_volume = base_order_volume,
                     first_safety_order_volume = first_safety_order_volume,

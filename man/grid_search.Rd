@@ -5,6 +5,7 @@
 \title{Perform a grid search to find the most profitable parameter settings}
 \usage{
 grid_search(
+  data,
   base_order_volume = 10,
   first_safety_order_volume = 10,
   n_safety_orders = seq(8, 16, by = 2),
@@ -15,18 +16,20 @@ grid_search(
   start_asap = T,
   stoploss = c(0, 25, 30, 40),
   compound = T,
-  data,
   min_covered_deviation = 8,
   min_down_tolerance = 8,
   max_required_capital = 10000,
   n_timeperiods = 1,
   timeperiods_shift_days = 1,
   progressbar = TRUE,
-  processing = "multisession",
+  processing = "sequential",
   ncores = parallel::detectCores()
 )
 }
 \arguments{
+\item{data}{A \code{data.table} containing \code{time} and \code{price} columns, and
+optionally a \code{deal_start} column.}
+
 \item{base_order_volume}{a numeric vector of sizes of the base order (in the
 quote currency)}
 
@@ -50,10 +53,6 @@ soon as possible}
 \item{stoploss}{a numeric vector of stoploss percentages}
 
 \item{compound}{a logical vector indicating whether to compound profits}
-
-\item{data}{A \code{data.table} containing \code{time} and \code{price} columns. If the
-argument \code{start_asap} is set to \code{FALSE} and additional columns \code{deal_start}
-is required.}
 
 \item{min_covered_deviation}{the minimum percentage price deviation from the
 initial order to the last safety order a given parameter combination must
@@ -86,10 +85,9 @@ shifted. This only has an effect if \code{n_timeperiods} is larger than 1.}
 \item{progressbar}{whether to show a progressbar or not}
 
 \item{processing}{a character string specifying the processing of the job.
-Default is \code{"multisession"} which corresponds to parallel processing
-using separate R sessions running in the background on the same machine.
-If you don't want to use parallel processing, set this argument to
-\code{"sequential"}.}
+Default is \code{"sequential"} which corresponds to sequential processing.
+If you want to use parallel processing, set this argument to
+\code{"multisession"}.}
 
 \item{ncores}{the number of CPU cores used in parallel processing.}
 }
@@ -106,10 +104,22 @@ given time period. By default, the grid search is run in parallel using all
 available CPU cores.
 }
 \examples{
-#Download price data
-dat <- get_binance_prices_from_csv("PYRUSDT", start_time = "2023-02-02",
-                                    progressbar = F)
+\dontrun{
+# Download price data
+dat <- get_binance_prices_from_csv(
+  "PYRUSDT",
+  start_time = "2025-01-01",
+  end_time = "2025-03-01",
+  progressbar = F
+)
 
-#Perform grid search
-grid_search(data = dat, progressbar = F)
+# Perform grid search
+res <- grid_search(dat, progressbar = F)
+
+# Plot the best result using purrr::exec
+# First, get the single row of best parameters
+best_params <- res |> dplyr::slice(1)
+# Then, use exec to call backtest, splicing the parameters with !!!
+exec(backtest, !!!best_params, data = dat, plot = TRUE)
+}
 }

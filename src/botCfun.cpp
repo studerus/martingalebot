@@ -19,8 +19,8 @@ List botCfun(double base_order_volume, double first_safety_order_volume,
   double profit, capital, required_capital, final_capital, capital_to_invest;
   double highest_capital, lowest_capital, down_tolerance;
   double buy_price = 0, sell_price = R_PosInf, stoploss_price = 0;
-  double base_order_price = price[0], current_invested, current_bought_coins;
-  double current_avg_price;
+  double base_order_price = price[0], current_invested = 0.0, current_bought_coins = 0.0;
+  double current_avg_price = 0.0;
   double time_inactive  = 0.0, max_trade_time = 0.0;
   double max_draw_down = 1, current_bottom = R_PosInf;
   double take_profit_factor, fee_factor = (100 - trading_fee) / 100;
@@ -106,7 +106,9 @@ List botCfun(double base_order_volume, double first_safety_order_volume,
         sell_price = R_PosInf;
         stoploss_price = R_NegInf;
       } else if ((price[i] <= buy_price) | (k == 0)) {
-        if (start_asap || deal_start[i]) {
+        // Only apply the trend filter to the very first order of a cycle;
+        // safety orders (k > 0) should always be allowed
+        if ((k == 0 ? (start_asap || deal_start[i]) : true)) {
           if (k == 0) {
             base_order_price = price[i];
             buy_price = base_order_price;

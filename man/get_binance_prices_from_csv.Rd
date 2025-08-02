@@ -9,7 +9,7 @@ get_binance_prices_from_csv(
   start_time = Sys.time() - lubridate::dmonths(2),
   end_time = Sys.time() - lubridate::ddays(2),
   spot = TRUE,
-  interval = 1L,
+  interval = "second",
   aggregated = FALSE,
   processing = "multisession",
   ncores = parallel::detectCores(),
@@ -24,8 +24,8 @@ or \code{POSIXt} or a character string that can be converted to these classes}
 
 \item{spot}{whether to download spot of futures trading data}
 
-\item{interval}{the interval for aggregating the data. 1 (default)
-corresponds to 1 second, 60 corresponds to 1 minute etc.}
+\item{interval}{the interval for aggregating the data. "second" (default)
+corresponds to 1 second, "minute" to 1 minute etc.}
 
 \item{aggregated}{whether to aggregate the price data or not. If TRUE a
 columns with the highest and lowest prices for the chosen time interval is

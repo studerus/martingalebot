@@ -123,7 +123,7 @@ dat <- get_binance_prices_from_csv('BONKUSDT',
                                    start_time = '2025-03-01',
                                    end_time = '2025-07-01', 
                                    progressbar = F)
-backtest(data = dat)
+dat |> backtest()
 ```
 
 The backtest function returns the following measures:
@@ -163,11 +163,11 @@ blue dots, respectively.
 library(tidyverse)
 library(optimization)
 library(GA)
-backtest(data = dat, plot = T)
+dat |> backtest(plot = T)
 ```
 
 ```{r, fig.height=12}
-backtest(data = dat, plot = T)
+dat |> backtest(plot = T)
 ```
 
 ### Deal start conditions
@@ -175,9 +175,9 @@ backtest(data = dat, plot = T)
 By default, new trades are started as soon as possible. If the price
 data set contains a logical vector `deal_start` and the argument
 `start_asap` is set to `FALSE`, new deals are only started where the
-logical vector `deal_start` in `data` is `TRUE`. We can add the Relative
-Strength Index (RSI) as a deal start condition to the data by using the
-function `add_rsi`. We can specify the time frame for the candles, the
+logical vector `deal_start` in `data` is `TRUE`. We can add a deal start condition, for
+example based on the Relative Strength Index (RSI), by using one of the
+`add_*_filter` functions. We can specify the time frame for the candles, the
 number of candles that are considered and the cutoff for creating the
 logical vector `deal_start`. In the following example, new deals are
 only started if the hourly RSI is below 30. You can see in the plot that
@@ -186,8 +186,9 @@ However, the performance is slightly worse because there are now less
 trades in total.
 
 ```{r}
-dat2 <- add_rsi(dat, time_period = "1 hour", n = 7, cutoff = 30)
-backtest(data = dat2, start_asap = F, plot = T)
+dat |>
+  add_rsi_filter(time_period = "1 hour", n = 7, cutoff = 30) |>
+  backtest(start_asap = FALSE, plot = TRUE)
 ```
 
 ### Parameter optimization
@@ -208,28 +209,28 @@ could also use, for, examples, values between 4 and 6, by explicitly
 specifying it:
 
 ```{r}
-res <- grid_search(data = dat, n_safety_orders = 4:6, progressbar = F)
+res <- dat |> 
+  grid_search(n_safety_orders = 4:6, progressbar = F)
 res
 ```
 
 The rows of the returned data frame are ordered by the column `profit`.
-In the first row, we see the set of parameters that led to highest
-profit. In order to plot the best performing parameter set, we can pass
-the values of the first row in `res` as arguments to `backtest` by using
-the function `do.call`.
+In the first row, we see the set of parameters that led to the highest
+profit. To plot the best-performing parameter set, we can pass the
+values from the first row of `res` as arguments to `backtest` using
+`purrr::exec()`. This function takes a function as its first argument
+and a list of parameters as its second, which we can create on the fly.
 
-```{r}
-do.call(backtest, c(as.list(res[1,]), list(data = dat, plot = T)))
-```
+```{r, eval=FALSE}
+# First, run the grid search
+res <- dat |>
+  grid_search(n_safety_orders = 4:6, progressbar = FALSE)
 
-Alternatively, we could do this more elegantly with the `tidyverse`
-package.
-
-```{r, eval = F}
-library(tidyverse)
-grid_search(data = dat, n_safety_orders = 4:6, progressbar = F) %>% 
-  slice(1) %>% 
-  pmap_df(backtest, data = dat, plot = T)
+# Then, plot the best result
+# We extract the first row as a list of parameters
+best_params <- res |> dplyr::slice(1)
+# And pass them to backtest using the !!! (big bang) operator
+exec(backtest, !!!best_params, data = dat, plot = TRUE)
 ```
 
 Instead of picking the most profitable parameter constellation, we could
@@ -270,9 +271,9 @@ library(optimization)
 
 #Define the optimization function:
 optim_fun <- function(x) {
-      y <- backtest(n_safety_orders = x[1], pricescale = x[2],
-                    volumescale = x[3], take_profit = x[4], stepscale = x[5],
-                    data = dat)
+      y <- dat |>
+        backtest(n_safety_orders = x[1], pricescale = x[2],
+                 volumescale = x[3], take_profit = x[4], stepscale = x[5])
       #Note that we return minus the profit because the optimization algorithm
       #expects a value that we want to reduce as much as possible
       - y$profit
@@ -288,9 +289,10 @@ res <- optim_sa(optim_fun, start = start, lower = lower, upper = upper,
                 control = list(nlimit = 200))$par
 
 #Plot the best parameter combination found by the optimization algorithm:
-backtest(n_safety_orders = round(res[1]), pricescale = res[2],
-         volumescale = res[3], take_profit = res[4], stepscale = res[5],
-         data = dat, plot = T)
+dat |>
+  backtest(n_safety_orders = round(res[1]), pricescale = res[2],
+           volumescale = res[3], take_profit = res[4], stepscale = res[5],
+           plot = TRUE)
 ```
 
 Instead of optimizing the profit, we could also optimize another
@@ -300,10 +302,10 @@ defining the optimization function like this:
 
 ```{r}
 optim_fun <- function(x) {
-      y <- backtest(n_safety_orders = x[1], pricescale = x[2],
-                    volumescale = x[3], take_profit = x[4], stepscale = x[5],
-                    data = dat)
-      with(y, max_draw_down + percent_inactive - down_tolerance - profit)
+      dat |>
+        backtest(n_safety_orders = x[1], pricescale = x[2],
+                 volumescale = x[3], take_profit = x[4], stepscale = x[5]) |>
+        with(max_draw_down + percent_inactive - down_tolerance - profit)
 }
 ```
 
@@ -319,9 +321,9 @@ library(GA)
 
 #Define the optimization function:
 optim_fun <- function(x) {
-      y <- backtest(n_safety_orders = x[1], pricescale = x[2],
-                    volumescale = x[3], take_profit = x[4], stepscale = x[5],
-                    data = dat)
+      y <- dat |>
+        backtest(n_safety_orders = x[1], pricescale = x[2],
+                 volumescale = x[3], take_profit = x[4], stepscale = x[5])
       #Note that this algorithm expects a value that we want to increase as much
       #as possible. Therefore, we return the positive profit here:
       y$profit
@@ -336,9 +338,10 @@ res <- ga(type = 'real-valued', optim_fun, lower = lower,
           upper = upper, maxiter = 200)@solution
 
 #Plot the best parameter combination found by the optimization algorithm:
-backtest(n_safety_orders = round(res[1]), pricescale = res[2],
-         volumescale = res[3], take_profit = res[4], stepscale = res[5],
-         data = dat, plot = T)
+dat |>
+  backtest(n_safety_orders = round(res[1]), pricescale = res[2],
+           volumescale = res[3], take_profit = res[4], stepscale = res[5],
+           plot = TRUE)
 ```
 
 ### Cross-validation
@@ -376,8 +379,8 @@ testing and create training and testing periods every month, we could
 specify:
 
 ```{r}
-slices <- create_timeslices(train_months = 4, test_months = 4,
-                            shift_months = 1, data = dat)
+slices <- dat |>
+  create_timeslices(train_months = 4, test_months = 4, shift_months = 1)
 slices
 ```
 
@@ -395,13 +398,15 @@ library(tidyverse)
 slices %>% 
   group_by(start_test, end_test) %>% 
   summarise({
-    #Get test and training data of the present row / iteration
+    # Get test and training data of the present row / iteration
     train_data <- filter(dat, between(time, start_train, end_train))
     test_data <- filter(dat, between(time, start_test, end_test))
-    #Find the best parameter combination in the training data
-    best <- grid_search(data = train_data, progressbar = F)[1,]
-    #Apply this parameter combination to the test data
-    pmap_df(best, backtest, data = test_data)
+    # Find the best parameter combination in the training data
+    best <- train_data |>
+      grid_search(progressbar = FALSE) |>
+      slice(1)
+    # Apply this parameter combination to the test data
+    exec(backtest, !!!best, data = test_data)
   })
 ```
 
@@ -424,9 +429,10 @@ slices %>%
   summarise({
     train_data <- filter(dat, between(time, start_train, end_train))
     test_data <- filter(dat, between(time, start_test, end_test))
-    best <- grid_search(data = train_data, min_down_tolerance = 12,
-                        progressbar = F)[1,]
-    pmap_df(best, backtest, data = test_data)
+    best <- train_data |>
+      grid_search(min_down_tolerance = 12, progressbar = FALSE) |>
+      slice(1)
+    exec(backtest, !!!best, data = test_data)
   })
 ```
 
@@ -448,10 +454,11 @@ slices %>%
   summarise({
     train_data <- filter(dat, between(time, start_train, end_train))
     test_data <- filter(dat, between(time, start_test, end_test))
-    best <- grid_search(data = train_data, progressbar = F) %>% 
-      filter(max_draw_down < 30 & percent_inactive < 3) %>% 
+    best <- train_data |>
+      grid_search(progressbar = FALSE) |>
+      filter(max_draw_down < 30 & percent_inactive < 3) |>
       slice(1)
-    pmap_df(best, backtest, data = test_data)
+    exec(backtest, !!!best, data = test_data)
   })
 ```
 
@@ -466,9 +473,10 @@ slices %>%
   summarise({
     train_data <- filter(dat, between(time, start_train, end_train))
     test_data <- filter(dat, between(time, start_test, end_test))
-    best <- grid_search(data = train_data, progressbar = F) %>% 
+    best <- train_data |>
+      grid_search(progressbar = FALSE) |>
       slice_max(profit - max_draw_down - percent_inactive)
-    pmap_df(best, backtest, data = test_data)
+    exec(backtest, !!!best, data = test_data)
   })
 ```
 
@@ -486,11 +494,11 @@ slices %>%
     
     #Define the optimization function:
     optim_fun <- function(x) {
-      y <- backtest(n_safety_orders = x[1], pricescale = x[2],
-                      volumescale = x[3], take_profit = x[4], stepscale = x[5],
-                      data = train_data)
-      #Note that we have to change signs here as compared to above
-      with(y, -profit + max_draw_down + percent_inactive)
+      train_data |>
+        backtest(n_safety_orders = x[1], pricescale = x[2],
+                 volumescale = x[3], take_profit = x[4], stepscale = x[5]) |>
+        #Note that we have to change signs here as compared to above
+        with(-profit + max_draw_down + percent_inactive)
     }
 
     #Define lower and upper bound and start values of parameters
@@ -503,9 +511,9 @@ slices %>%
                     control = list(nlimit = 200))$par
 
     #Apply best parameter combination to test data
-    backtest(n_safety_orders = round(res[1]), pricescale = res[2],
-             volumescale = res[3], take_profit = res[4], stepscale = res[5],
-             data = test_data)
+    test_data |>
+      backtest(n_safety_orders = round(res[1]), pricescale = res[2],
+               volumescale = res[3], take_profit = res[4], stepscale = res[5])
   })
 ```
 
@@ -521,10 +529,10 @@ slices %>%
     
     #Define the optimization function:
     optim_fun <- function(x) {
-      y <- backtest(n_safety_orders = x[1], pricescale = x[2],
-                      volumescale = x[3], take_profit = x[4], stepscale = x[5],
-                      data = train_data)
-      with(y, profit - max_draw_down - percent_inactive)
+      train_data |>
+        backtest(n_safety_orders = x[1], pricescale = x[2],
+                 volumescale = x[3], take_profit = x[4], stepscale = x[5]) |>
+        with(profit - max_draw_down - percent_inactive)
     }
 
     #Define lower and upper bound of parameters
@@ -536,8 +544,8 @@ slices %>%
               upper = upper, maxiter = 200, monitor = F)@solution
 
     #Apply best parameter combination to test data
-    backtest(n_safety_orders = round(res[1]), pricescale = res[2],
-             volumescale = res[3], take_profit = res[4], stepscale = res[5],
-             data = test_data)
+    test_data |>
+      backtest(n_safety_orders = round(res[1]), pricescale = res[2],
+               volumescale = res[3], take_profit = res[4], stepscale = res[5])
   })
 ```

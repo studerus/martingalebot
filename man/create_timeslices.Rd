@@ -4,9 +4,11 @@
 \alias{create_timeslices}
 \title{Create time slices for cross validation}
 \usage{
-create_timeslices(train_months = 4, test_months = 4, shift_months = 2, data)
+create_timeslices(data, train_months = 4, test_months = 4, shift_months = 2)
 }
 \arguments{
+\item{data}{A \code{data.table} containing at least a \code{time} column.}
+
 \item{train_months}{The number of months training data sets cover}
 
 \item{test_months}{The number of months test data sets cover}
@@ -14,8 +16,6 @@ create_timeslices(train_months = 4, test_months = 4, shift_months = 2, data)
 \item{shift_months}{The number of months pairs of test and training data sets
 are shifted to each other. The smaller this number the more pairs of test
 and training data sets can be created.}
-
-\item{data}{}
 }
 \value{
 A \code{tibble} of time slices. One row corresponds to one iteration of the outer
@@ -28,8 +28,10 @@ validation. A training time period is always immediately followed by testing
 time period.
 }
 \examples{
-dat <- get_binance_prices_from_csv("PYRUSDT", start_time = "2022-01-01",
-                                   progressbar = F)
-create_timeslices(train_months = 4, test_months = 4, shift_months = 1,
-                  data = dat)
+get_binance_prices_from_csv(
+  "PYRUSDT",
+   start_time = "2022-01-01",
+   progressbar = F
+ ) |>
+ create_timeslices(train_months = 4, test_months = 4, shift_months = 1)
 }

@@ -5,12 +5,12 @@
 #' validation. A training time period is always immediately followed by testing
 #' time period.
 #'
+#' @param data A `data.table` containing at least a `time` column.
 #' @param train_months The number of months training data sets cover
 #' @param test_months  The number of months test data sets cover
 #' @param shift_months The number of months pairs of test and training data sets
 #'   are shifted to each other. The smaller this number the more pairs of test
 #'   and training data sets can be created.
-#' @param data
 #'
 #' @return
 #' A `tibble` of time slices. One row corresponds to one iteration of the outer
@@ -18,12 +18,14 @@
 #' @export
 #'
 #' @examples
-#' dat <- get_binance_prices_from_csv("PYRUSDT", start_time = "2022-01-01",
-#'                                    progressbar = F)
-#' create_timeslices(train_months = 4, test_months = 4, shift_months = 1,
-#'                   data = dat)
-create_timeslices <- function(train_months = 4, test_months = 4,
-                              shift_months = 2, data) {
+#' get_binance_prices_from_csv(
+#'   "PYRUSDT",
+#'    start_time = "2022-01-01",
+#'    progressbar = F
+#'  ) |>
+#'  create_timeslices(train_months = 4, test_months = 4, shift_months = 1)
+create_timeslices <- function(data, train_months = 4, test_months = 4,
+                              shift_months = 2) {
   tbl <- tibble::tibble(period = 1,
                 start_train = min(data$time),
                 end_train = start_train + lubridate::dmonths(train_months),

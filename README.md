@@ -5,7 +5,7 @@
 
 ## Overview
 
-The `martingalebot` package provides comprehensive tools for downloading cryptocurrency price data from Binance and performing backtesting and parameter optimization for martingale trading strategies (also known as Dollar Cost Averaging or DCA bots). These strategies are commonly implemented by popular trading platforms such as [3commas](https://3commas.io/), [Pionex](https://www.pionex.com/), [TradeSanta](https://tradesanta.com/), [Mizar](https://mizar.com/), [OKX](https://www.okx.com/), and [Bitget](https://www.bitget.com/).
+The `martingalebot` package provides comprehensive tools for downloading cryptocurrency price data from Binance and performing backtesting and parameter optimization for martingale trading strategies (also known as Dollar Cost Averaging or DCA bots). These strategies are commonly implemented by popular trading platforms such as [3commas](https://3commas.io/), [Pionex](https://www.pionex.com/), [TradeSanta](https://tradesanta.com/), [Mizar](https://mizar.com/), [Binance](https://www.binance.com/), [OKX](https://www.okx.com/), [Crypto.com](https://crypto.com/), and [Bitget](https://www.bitget.com/).
 
 ## Key Features
 
@@ -28,7 +28,7 @@ The `martingalebot` package provides comprehensive tools for downloading cryptoc
 - **Multiple algorithms**: Integration with genetic algorithms and simulated annealing
 
 ### 📈 Technical Analysis
-- **RSI integration**: Conditional deal start based on technical indicators
+- **Deal Start Filters**: Use SMA, RSI, Bollinger Bands, and MACD as trend or entry filters.
 - **Custom conditions**: Flexible entry/exit signal implementation
 - **Visualization**: Interactive plots with trade execution details
 
@@ -48,46 +48,47 @@ devtools::install_github("studerus/martingalebot")
 
 ```r
 library(martingalebot)
+library(dplyr) # For the pipe operator and other utilities
 
 # Download recent price data for ETHUSDT
-data <- get_binance_prices_from_csv(
+dat <- get_binance_prices_from_csv(
   symbol = "ETHUSDT",
   start_time = "2025-01-01", 
   end_time = "2025-02-01"
 )
 
-head(data)
+head(dat)
 ```
 
 ### 2. Run a Simple Backtest
 
 ```r
-# Backtest with default martingale parameters
-results <- backtest(data = data)
+# Backtest with default martingale parameters using the pipe
+results <- dat |> backtest()
 print(results)
 
-# Backtest with custom parameters
-results <- backtest(
-  data = data,
-  base_order_volume = 50,
-  first_safety_order_volume = 50,
-  n_safety_orders = 8,
-  pricescale = 2.5,
-  take_profit = 2.0,
-  plot = TRUE
-)
+# Backtest with custom parameters and plot the results
+dat |> 
+  backtest(
+    base_order_volume = 50,
+    first_safety_order_volume = 50,
+    n_safety_orders = 8,
+    pricescale = 2.5,
+    take_profit = 2.0,
+    plot = TRUE
+  )
 ```
 
 ### 3. Optimize Parameters
 
 ```r
 # Grid search for optimal parameters
-optimization_results <- grid_search(
-  data = data,
-  n_safety_orders = 6:10,
-  pricescale = c(2.0, 2.5, 3.0),
-  take_profit = c(1.5, 2.0, 2.5)
-)
+optimization_results <- dat |>
+  grid_search(
+    n_safety_orders = 6:10,
+    pricescale = c(2.0, 2.5, 3.0),
+    take_profit = c(1.5, 2.0, 2.5)
+  )
 
 # View best performing parameters
 head(optimization_results)
@@ -97,23 +98,26 @@ head(optimization_results)
 
 ```r
 # Create time slices for cross-validation
-slices <- create_timeslices(
-  train_months = 4,
-  test_months = 2, 
-  shift_months = 1,
-  data = data
-)
+slices <- dat |>
+  create_timeslices(
+    train_months = 4,
+    test_months = 2, 
+    shift_months = 1
+  )
 
 # Perform cross-validated optimization
-cv_results <- slices %>%
-  group_by(start_test, end_test) %>%
+cv_results <- slices |>
+  group_by(start_test, end_test) |>
   summarise({
-    train_data <- filter(data, between(time, start_train, end_train))
-    test_data <- filter(data, between(time, start_test, end_test))
+    train_data <- filter(dat, between(time, start_train, end_train))
+    test_data <- filter(dat, between(time, start_test, end_test))
     
-    best_params <- grid_search(data = train_data)[1,]
-    pmap_df(best_params, backtest, data = test_data)
-  })
+    best_params <- train_data |>
+      grid_search() |>
+      slice(1)
+      
+    exec(backtest, !!!best_params, data = test_data)
+  }, .groups = "drop")
 ```
 
 ## Strategy Parameters
@@ -147,20 +151,13 @@ The package provides comprehensive performance metrics:
 
 ### Technical Indicators
 
-```r
-# Add RSI-based entry conditions
-data_with_rsi <- add_rsi(
-  data = data,
-  time_period = "1 hour",
-  n = 14,
-  cutoff = 30
-)
+The package includes several `add_*_filter` functions (`add_sma_filter`, `add_rsi_filter`, `add_bollinger_filter`, `add_macd_filter`) to generate deal start signals based on common technical indicators.
 
-# Only start deals when RSI < 30
-results <- backtest(
-  data = data_with_rsi,
-  start_asap = FALSE
-)
+```r
+# Add RSI-based entry conditions and backtest in a single pipeline
+dat |>
+  add_rsi_filter(time_period = "1 hour", n = 14, cutoff = 30) |>
+  backtest(start_asap = FALSE)
 ```
 
 ### Optimization Algorithms
@@ -170,12 +167,15 @@ results <- backtest(
 library(GA)
 
 optimize_function <- function(params) {
-  result <- backtest(
-    n_safety_orders = params[1],
-    pricescale = params[2],
-    take_profit = params[3],
-    data = data
-  )
+  # The GA passes an unnamed vector, so we assign names for backtest
+  names(params) <- c("n_safety_orders", "pricescale", "take_profit")
+  
+  result <- dat |>
+    backtest(
+      n_safety_orders = params["n_safety_orders"],
+      pricescale = params["pricescale"],
+      take_profit = params["take_profit"]
+    )
   return(result$profit)
 }
 

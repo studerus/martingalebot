@@ -34,7 +34,7 @@ get_binance_prices_from_csv <- function(symbol = "PYRUSDT",
               spot = TRUE, interval = "second", aggregated = FALSE,
               processing = "multisession", ncores = parallel::detectCores(),
               progressbar = TRUE) {
-  tz <- Sys.timezone()
+  tz <- "UTC"
   if (is.character(start_time)) {
     start_time <- lubridate::as_datetime(start_time, tz = tz)
   }
@@ -69,7 +69,7 @@ get_binance_prices_from_csv <- function(symbol = "PYRUSDT",
     p <- local(function(...) NULL)
     environment(p) <- new.env(parent = emptyenv())
   }
-  furrr::future_map_dfr(urls, ~ {
+  result <- furrr::future_map_dfr(urls, ~ {
     options(timeout = 3600)
     tf <- tempfile(fileext = ".zip")
     download.file(.x, tf, quiet = T, method = "libcurl")
@@ -94,4 +94,6 @@ get_binance_prices_from_csv <- function(symbol = "PYRUSDT",
     p()
     dat[time >= start_time & time <= end_time]
   })
+  data.table::setorder(result, time)
+  result
 }

@@ -5,6 +5,7 @@
 \title{Backtest for a single pair martingale trading strategy}
 \usage{
 backtest(
+  data,
   base_order_volume = 10,
   first_safety_order_volume = 10,
   n_safety_orders = 8,
@@ -16,13 +17,16 @@ backtest(
   start_asap = T,
   plot = F,
   show_trades = F,
-  data,
   compound = T,
   trading_fee = 0.075,
   ...
 )
 }
 \arguments{
+\item{data}{A \code{data.table} containing \code{time} and \code{price} columns. If the
+argument \code{start_asap} is set to \code{FALSE} and additional columns \code{deal_start}
+is required.}
+
 \item{base_order_volume}{The size of the base order (in the quote currency)}
 
 \item{first_safety_order_volume}{The size of the first safety order (in
@@ -53,10 +57,6 @@ vector
 \item{plot}{Whether to plot the results}
 
 \item{show_trades}{Whether to return a \code{data.frame} showing the first trades}
-
-\item{data}{A \code{data.table} containing \code{time} and \code{price} columns. If the
-argument \code{start_asap} is set to \code{FALSE} and additional columns \code{deal_start}
-is required.}
 
 \item{compound}{Whether to compound the profit or not. Default is \code{TRUE}.}
 
@@ -102,10 +102,12 @@ strategy as implemented by single pair dca bots on
 and others. It is mostly written in C++ to maximize speed.
 }
 \examples{
-#Download some price data
-dat <- get_binance_prices_from_csv('PYRUSDT', start_time = '2023-02-02',
-                                    progressbar = F)
-
-#Perform backtesting
-backtest(data = dat)
+#Download some price data and perform backtesting
+get_binance_prices_from_csv(
+  'PYRUSDT',
+   start_time = '2025-01-01',
+   end_time = '2025-03-01',
+   progressbar = F
+) |>
+backtest()
 }

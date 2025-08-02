@@ -53,7 +53,7 @@ get_binance_klines_from_csv <- function(symbol = "BTCUSDT",
                              "taker_buy_quote_asset_volume", "symbol"),
                col_select = if (include_volume_data) 1:11 else c(1:5, 7)) |>
     data.table::rbindlist()
-  fun <- \(x) lubridate::as_datetime(x %/% 1e6,  tz = Sys.timezone())
+  fun <- \(x) lubridate::as_datetime(x %/% 1e3,  tz = "UTC")
   dt[, `:=`(open_time = fun(open_time), close_time = fun(close_time))]
   dt[open_time >= start_time & close_time <= end_time]
 }
