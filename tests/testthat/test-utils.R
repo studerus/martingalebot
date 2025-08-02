@@ -36,6 +36,7 @@ test_that("grid_search with multiple time periods works", {
   result <- grid_search(
     test_data,
     base_order_volume = c(10, 20),
+    pricescale = 1,
     take_profit = c(2, 3),
     n_timeperiods = 3,
     progressbar = FALSE

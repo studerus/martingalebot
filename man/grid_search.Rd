@@ -116,10 +116,9 @@ dat <- get_binance_prices_from_csv(
 # Perform grid search
 res <- grid_search(dat, progressbar = F)
 
-# Plot the best result using purrr::exec
-# First, get the single row of best parameters
-best_params <- res |> dplyr::slice(1)
-# Then, use exec to call backtest, splicing the parameters with !!!
-exec(backtest, !!!best_params, data = dat, plot = TRUE)
+# Plot the best result using the magrittr pipe
+res \%>\%
+  slice_max(profit, n = 1) \%>\%
+  exec(backtest, !!!., data = dat, plot = TRUE)
 }
 }

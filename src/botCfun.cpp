@@ -65,11 +65,13 @@ List botCfun(double base_order_volume, double first_safety_order_volume,
       Named("Sold") = Sold, Named("Dollar") = Dollar, Named("Cycle") = Cycle,
       Named("Capital") = Capital);
   volume[0] = base_order_volume;
-  volume[1] = first_safety_order_volume;
-  dev[1] = pricescale;
-  for (int i = 2; i < n_orders; ++i) {
-    volume[i] = volume[i - 1] * volumescale;
-    dev[i] = dev[i - 1] + (dev[i - 1] - dev[i - 2]) * pricemult;
+  if (n_safety_orders > 0) {
+    volume[1] = first_safety_order_volume;
+    dev[1] = pricescale;
+    for (int i = 2; i < n_orders; ++i) {
+      volume[i] = volume[i - 1] * volumescale;
+      dev[i] = dev[i - 1] + (dev[i - 1] - dev[i - 2]) * pricemult;
+    }
   }
   down_tolerance = (sum(dev * volume) / sum(volume)) - take_profit;
   buy_price_factor = (100 - dev) / 100;
