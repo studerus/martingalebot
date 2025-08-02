@@ -9,6 +9,28 @@ List botCfun(double base_order_volume, double first_safety_order_volume,
              double trading_fee, bool show_trades, bool plot,
              bool start_asap, bool compound, NumericVector price,
              DatetimeVector date, LogicalVector deal_start) {
+  if (base_order_volume <= 0) {
+    stop("base_order_volume must be positive.");
+  }
+  if (first_safety_order_volume <= 0) {
+    stop("first_safety_order_volume must be positive.");
+  }
+  if (n_safety_orders < 0) {
+    stop("n_safety_orders cannot be negative.");
+  }
+  if (take_profit <= 0) {
+    stop("take_profit must be positive.");
+  }
+  if (pricescale <= 0) {
+    stop("pricescale must be positive.");
+  }
+  if (volumescale <= 0) {
+    stop("volumescale must be positive.");
+  }
+  if (stoploss < 0 || stoploss >= 100) {
+    stop("stoploss must be between 0 and 100.");
+  }
+
   int n = 20, k = 0, j = 0, cycle = 1, n_trades = 0, n_stoploss = 0;
   int i_end = price.size(), plot_step = i_end / 2000, base_order_buy_time = 0;
   int n_orders = n_safety_orders + 1, time_diff = 0, last_so_buy_time = 0;

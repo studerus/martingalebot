@@ -65,7 +65,7 @@ add_macd_filter <- function(dt, time_period = "1 hour", nFast = 12, nSlow = 26, 
   # 2. Calculate MACD. It returns a data.frame with 'macd' and 'signal' columns.
   if (nrow(dt_resampled) > nSlow) {
       macd_vals <- TTR::MACD(dt_resampled$price, nFast = nFast, nSlow = nSlow, nSig = nSig)
-      dt_resampled[, c("macd", "signal") := as.data.table(macd_vals)]
+      dt_resampled[, c("macd", "signal") := data.table::as.data.table(macd_vals)]
   } else {
       dt_resampled[, c("macd", "signal") := .(NA_real_, NA_real_)]
   }
