@@ -11,8 +11,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // botCfun
-List botCfun(double base_order_volume, double first_safety_order_volume, int n_safety_orders, double take_profit, double pricescale, double volumescale, double pricemult, double stoploss, double trading_fee, bool show_trades, bool plot, bool start_asap, bool compound, NumericVector price, DatetimeVector date, LogicalVector deal_start);
-RcppExport SEXP _martingalebot_botCfun(SEXP base_order_volumeSEXP, SEXP first_safety_order_volumeSEXP, SEXP n_safety_ordersSEXP, SEXP take_profitSEXP, SEXP pricescaleSEXP, SEXP volumescaleSEXP, SEXP pricemultSEXP, SEXP stoplossSEXP, SEXP trading_feeSEXP, SEXP show_tradesSEXP, SEXP plotSEXP, SEXP start_asapSEXP, SEXP compoundSEXP, SEXP priceSEXP, SEXP dateSEXP, SEXP deal_startSEXP) {
+List botCfun(double base_order_volume, double first_safety_order_volume, int n_safety_orders, double take_profit, double pricescale, double volumescale, double pricemult, double stoploss, bool trailing_take_profit, double trailing_rate, double trading_fee, bool show_trades, bool plot, bool start_asap, bool compound, bool use_emergency_stop, NumericVector price, DatetimeVector date, LogicalVector deal_start, LogicalVector emergency_stop);
+RcppExport SEXP _martingalebot_botCfun(SEXP base_order_volumeSEXP, SEXP first_safety_order_volumeSEXP, SEXP n_safety_ordersSEXP, SEXP take_profitSEXP, SEXP pricescaleSEXP, SEXP volumescaleSEXP, SEXP pricemultSEXP, SEXP stoplossSEXP, SEXP trailing_take_profitSEXP, SEXP trailing_rateSEXP, SEXP trading_feeSEXP, SEXP show_tradesSEXP, SEXP plotSEXP, SEXP start_asapSEXP, SEXP compoundSEXP, SEXP use_emergency_stopSEXP, SEXP priceSEXP, SEXP dateSEXP, SEXP deal_startSEXP, SEXP emergency_stopSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -24,21 +24,25 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type volumescale(volumescaleSEXP);
     Rcpp::traits::input_parameter< double >::type pricemult(pricemultSEXP);
     Rcpp::traits::input_parameter< double >::type stoploss(stoplossSEXP);
+    Rcpp::traits::input_parameter< bool >::type trailing_take_profit(trailing_take_profitSEXP);
+    Rcpp::traits::input_parameter< double >::type trailing_rate(trailing_rateSEXP);
     Rcpp::traits::input_parameter< double >::type trading_fee(trading_feeSEXP);
     Rcpp::traits::input_parameter< bool >::type show_trades(show_tradesSEXP);
     Rcpp::traits::input_parameter< bool >::type plot(plotSEXP);
     Rcpp::traits::input_parameter< bool >::type start_asap(start_asapSEXP);
     Rcpp::traits::input_parameter< bool >::type compound(compoundSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_emergency_stop(use_emergency_stopSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type price(priceSEXP);
     Rcpp::traits::input_parameter< DatetimeVector >::type date(dateSEXP);
     Rcpp::traits::input_parameter< LogicalVector >::type deal_start(deal_startSEXP);
-    rcpp_result_gen = Rcpp::wrap(botCfun(base_order_volume, first_safety_order_volume, n_safety_orders, take_profit, pricescale, volumescale, pricemult, stoploss, trading_fee, show_trades, plot, start_asap, compound, price, date, deal_start));
+    Rcpp::traits::input_parameter< LogicalVector >::type emergency_stop(emergency_stopSEXP);
+    rcpp_result_gen = Rcpp::wrap(botCfun(base_order_volume, first_safety_order_volume, n_safety_orders, take_profit, pricescale, volumescale, pricemult, stoploss, trailing_take_profit, trailing_rate, trading_fee, show_trades, plot, start_asap, compound, use_emergency_stop, price, date, deal_start, emergency_stop));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_martingalebot_botCfun", (DL_FUNC) &_martingalebot_botCfun, 16},
+    {"_martingalebot_botCfun", (DL_FUNC) &_martingalebot_botCfun, 20},
     {NULL, NULL, 0}
 };
 

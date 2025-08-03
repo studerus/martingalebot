@@ -2,49 +2,40 @@
 % Please edit documentation in R/add_rsi_filter.R
 \name{add_rsi_filter}
 \alias{add_rsi_filter}
-\title{Add an RSI-based deal start filter to a data.table}
+\title{Add an RSI-based signal filter to a data.table}
 \usage{
-add_rsi_filter(dt, time_period = "1 hour", n = 7, cutoff = 30)
+add_rsi_filter(
+  dt,
+  time_period = "1 hour",
+  n = 7,
+  cutoff = 30,
+  column_name = "deal_start",
+  rsi_is_above = FALSE
+)
 }
 \arguments{
-\item{dt}{A \code{data.table} containing 'time' and 'price' columns. The function
-assumes the data is already sorted by time for performance reasons.}
+\item{dt}{A \code{data.table} containing 'time' and 'price' columns.}
 
 \item{time_period}{The time frame for resampling, e.g., "1 hour", "15 minutes".}
 
 \item{n}{The number of periods for the RSI calculation.}
 
-\item{cutoff}{The RSI threshold below which a deal can be started.}
+\item{cutoff}{The RSI threshold.}
+
+\item{column_name}{The name of the logical column to be created. Defaults to "deal_start".}
+
+\item{rsi_is_above}{If \code{TRUE}, the signal is \code{TRUE} when RSI > cutoff. If \code{FALSE} (default),
+the signal is \code{TRUE} when RSI < cutoff.}
 }
 \value{
-The \code{data.table} \code{dt} is returned after being modified in place,
-allowing for use in a \code{magrittr} pipeline.
+The \code{data.table} \code{dt} is returned after being modified in place.
 }
 \description{
 This function calculates the Relative Strength Index (RSI) on a resampled
-time series (e.g., hourly) and then maps the signals back to the original
-high-frequency data. It creates a logical \code{deal_start} column which is \code{TRUE}
-when the RSI is below a specified cutoff. This prepares the data for use with
-\code{backtest(..., start_asap = FALSE)}.
+time series and creates a logical column based on a cutoff. It can be used
+to create \code{deal_start} signals (e.g., RSI is low, indicating oversold) or
+\code{emergency_stop} signals (e.g., RSI is high, indicating overbought).
 
 The function modifies the input \code{data.table} by reference for maximum memory
-efficiency, meaning no large data copies are made.
-}
-\examples{
-\dontrun{
-# Download data and add the RSI filter in a single pipeline.
-dat <- get_binance_prices_from_csv(
-  'PYRUSDT',
-  start_time = '2023-02-01',
-  end_time = '2023-02-28',
-  progressbar = FALSE
-) |>
-  add_rsi_filter(time_period = "30 minutes", cutoff = 30)
-
-# Perform backtesting using the new 'deal_start' column
-backtest(data = dat, start_asap = FALSE)
-}
-}
-\seealso{
-\code{\link{add_sma_filter}}, \code{\link{add_bollinger_filter}}, \code{\link{add_macd_filter}}
+efficiency.
 }

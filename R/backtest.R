@@ -7,9 +7,8 @@
 #' [OKX](https://www.okx.com/learn/introducing-the-spot-dollar-cost-averaging-dca-bot)
 #' and others. It is mostly written in C++ to maximize speed.
 #'
-#' @param data A `data.table` containing `time` and `price` columns. If the
-#' argument `start_asap` is set to `FALSE` and additional columns `deal_start`
-#' is required.
+#' @param data A `data.table` containing `time` and `price` columns. Additional logical
+#' columns `deal_start` and `emergency_stop` can be provided to control deal openings and closings.
 #' @param base_order_volume The size of the base order (in the quote currency)
 #' @param first_safety_order_volume The size of the first safety order (in
 #' the quote currency)
@@ -24,10 +23,13 @@
 #'   by the last safety order be multiplied?
 #' @param stoploss At what percentage of drawdown should a stoploss be
 #'   triggered? If set to zero (default), a stoploss will never be triggered.
+#' @param trailing_take_profit Should a trailing take profit be used? Default is `FALSE`.
+#' @param trailing_rate The percentage of price decrease from the peak that triggers a sale.
 #' @param start_asap Should new deals be started immediately after last deal was
 #'   closed. If set to `FALSE` new deals are only started where the logical
-#'   vector
-#' `deal_start` in `data` is TRUE.
+#'   vector `deal_start` in `data` is TRUE.
+#' @param use_emergency_stop Whether to use the `emergency_stop` column in `data`
+#' to close deals and prevent new ones. Default is `FALSE`.
 #' @param plot Whether to plot the results
 #' @param show_trades Whether to return a `data.frame` showing the first trades
 #' @param compound Whether to compound the profit or not. Default is `TRUE`.
@@ -49,65 +51,68 @@
 #' to the take profit price when all safety orders are filled.
 #' * `max_time`: The maximum number of days the bot was in a stuck position
 #' (maximum number of days of beeing fully invested).
-#' * `percent_inactive`: The percentag of time the bot was in a stuck position.
+#' * `percent_inactive`: The percentage of time the bot was in a stuck position.
 #' That is, all safety orders were filled and the bot was fully invested.
 #' * `n_stoploss`: The number of stoplosses that had been triggered.
-#'
-#' If the argument `show_trades` is `TRUE` a `data.frame` with the first few
-#' trades is returned. This was mainly implemented to check the correctness
-#' of the trading algorithm.
-#'
-#' If the argument `plot` is `TRUE` an interactive plot showing the changes in
-#' capital and price of the traded cryptocurrency over time as well as
-
-#' performed buy and sell orders and stoplosses.
+#' * `n_emergency_stops`: The number of emergency stops that had been triggered.
 #'
 #' @export
 #' @useDynLib martingalebot, .registration = TRUE
 #' @importFrom Rcpp sourceCpp
 #'
-#' @examples
-#' #Download some price data and perform backtesting
-#' get_binance_prices_from_csv(
-#'   'PYRUSDT',
-#'    start_time = '2025-01-01',
-#'    end_time = '2025-03-01',
-#'    progressbar = F
-#' ) |>
-#' backtest()
 backtest <- function(data, base_order_volume = 10, first_safety_order_volume = 10,
-                n_safety_orders = 8, pricescale = 2.4, volumescale = 1.5,
-                take_profit = 2.4, stepscale = 1, stoploss = 0, start_asap = T,
-                plot = F, show_trades = F, compound = T,
-                trading_fee = 0.075, ...) {
+                     n_safety_orders = 8, pricescale = 2.4, volumescale = 1.5,
+                     take_profit = 2.4, stepscale = 1, stoploss = 0,
+                     trailing_take_profit = FALSE, trailing_rate = 0.002,
+                     start_asap = TRUE, use_emergency_stop = FALSE,
+                     plot = F, show_trades = F, compound = T,
+                     trading_fee = 0.075, ...) {
+
+  if (trailing_take_profit && (!is.numeric(trailing_rate) || trailing_rate < 0.001)) {
+    stop("If trailing_take_profit is TRUE, trailing_rate must be at least 0.001 (0.1%).")
+  }
+
+  if (use_emergency_stop && is.null(data$emergency_stop)) {
+    stop("If use_emergency_stop is TRUE, data must contain an 'emergency_stop' column.")
+  }
+
   output <- botCfun(base_order_volume = base_order_volume,
-                    first_safety_order_volume = first_safety_order_volume,
-                    n_safety_orders = n_safety_orders, pricescale = pricescale,
-                    volumescale = volumescale, take_profit = take_profit,
-                    pricemult = stepscale, stoploss = stoploss,
-                    trading_fee = trading_fee, show_trades = show_trades,
-                    plot = plot, start_asap = start_asap, compound = compound,
-                    price = data$price, date = data$time,
-                    deal_start = if (start_asap) T else data$deal_start)
+                      first_safety_order_volume = first_safety_order_volume,
+                      n_safety_orders = n_safety_orders, pricescale = pricescale,
+                      volumescale = volumescale, take_profit = take_profit,
+                      pricemult = stepscale, stoploss = stoploss,
+                      trailing_take_profit = trailing_take_profit,
+                      trailing_rate = trailing_rate,
+                      trading_fee = trading_fee, show_trades = show_trades,
+                      plot = plot, start_asap = start_asap, compound = compound,
+                      use_emergency_stop = use_emergency_stop,
+                      price = data$price, date = data$time,
+                      deal_start = if (start_asap) TRUE else data$deal_start,
+                      emergency_stop = if (use_emergency_stop) data$emergency_stop else FALSE)
+
   if (plot) {
     fee_factor <- (100 - trading_fee) / 100
     df <- output[[2]] |>
-      dplyr::filter(Time != 0) |>
+      dplyr::filter(Time > as.POSIXct("1971-01-01")) |>
       dplyr::arrange(Time) |>
       dplyr::mutate(Cycle = 1 + cumsum(!is.na(dplyr::lag(Sold)))) |>
       dplyr::filter(cumsum(Capital) > 0) |>
       dplyr::group_by(Cycle) |>
       dplyr::mutate(Capital = ifelse(is.na(Sold),
-                dplyr::first(Capital[Capital != 0]) - cumsum(Dollar) +
-                fee_factor * cumsum(Bought) * Price, Capital)) |>
+                                     dplyr::first(Capital[Capital != 0]) - cumsum(Dollar) +
+                                       fee_factor * cumsum(Bought) * Price, Capital)) |>
       dplyr::ungroup(Cycle) |>
       dplyr::mutate(Capital = 100 * Capital / dplyr::first(Capital))
-    buys <- dplyr::filter(df, Average_Buy_Price != 0) |>
+      
+    buys <- dplyr::filter(df, Trade_Type == "Buy") |>
       tibble::add_column(name = 'Price')
-    sells <- dplyr::filter(df, Price_Change > 0) |>
+    sells <- dplyr::filter(df, Trade_Type == "Take Profit") |>
       tibble::add_column(name = 'Price')
-    stoplosses <- dplyr::filter(df, Price_Change < 0 & is.na(Bought)) |>
+    stoplosses <- dplyr::filter(df, Trade_Type == "Stop Loss") |>
       tibble::add_column(name = 'Price')
+    emergency_stops <- dplyr::filter(df, Trade_Type == "Emergency Stop") |>
+      tibble::add_column(name = 'Price')
+      
     gg <- df |>
       dplyr::select(Time, Price, Capital) |>
       tidyr::pivot_longer(Price:Capital) |>
@@ -119,6 +124,8 @@ backtest <- function(data, base_order_volume = 10, first_safety_order_volume = 1
                           size = 1.4, color = 'green') +
       ggplot2::geom_point(data = stoplosses, ggplot2::aes(x = Time, y = Price),
                           size = 1.6, color = 'blue') +
+      ggplot2::geom_point(data = emergency_stops, ggplot2::aes(x = Time, y = Price),
+                          size = 1.6, color = 'purple') +
       ggplot2::facet_wrap(. ~ name, ncol = 1, scales = 'free') +
       ggplot2::labs(title = 'title', y = NULL, x = NULL) +
       tidyquant::theme_tq()
@@ -143,7 +150,7 @@ backtest <- function(data, base_order_volume = 10, first_safety_order_volume = 1
     }
   } else {
     if (show_trades) {
-      output[[2]]
+      output[[2]] |> dplyr::filter(Time > as.POSIXct("1971-01-01"))
     } else {
       tibble::tibble(output[[1]])
     }

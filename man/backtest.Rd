@@ -14,7 +14,10 @@ backtest(
   take_profit = 2.4,
   stepscale = 1,
   stoploss = 0,
-  start_asap = T,
+  trailing_take_profit = FALSE,
+  trailing_rate = 0.002,
+  start_asap = TRUE,
+  use_emergency_stop = FALSE,
   plot = F,
   show_trades = F,
   compound = T,
@@ -23,9 +26,8 @@ backtest(
 )
 }
 \arguments{
-\item{data}{A \code{data.table} containing \code{time} and \code{price} columns. If the
-argument \code{start_asap} is set to \code{FALSE} and additional columns \code{deal_start}
-is required.}
+\item{data}{A \code{data.table} containing \code{time} and \code{price} columns. Additional logical
+columns \code{deal_start} and \code{emergency_stop} can be provided to control deal openings and closings.}
 
 \item{base_order_volume}{The size of the base order (in the quote currency)}
 
@@ -49,10 +51,16 @@ by the last safety order be multiplied?}
 \item{stoploss}{At what percentage of drawdown should a stoploss be
 triggered? If set to zero (default), a stoploss will never be triggered.}
 
+\item{trailing_take_profit}{Should a trailing take profit be used? Default is \code{FALSE}.}
+
+\item{trailing_rate}{The percentage of price decrease from the peak that triggers a sale.}
+
 \item{start_asap}{Should new deals be started immediately after last deal was
 closed. If set to \code{FALSE} new deals are only started where the logical
-vector
-\code{deal_start} in \code{data} is TRUE.}
+vector \code{deal_start} in \code{data} is TRUE.}
+
+\item{use_emergency_stop}{Whether to use the \code{emergency_stop} column in \code{data}
+to close deals and prevent new ones. Default is \code{FALSE}.}
 
 \item{plot}{Whether to plot the results}
 
@@ -80,18 +88,11 @@ to the last safety order.
 to the take profit price when all safety orders are filled.
 \item \code{max_time}: The maximum number of days the bot was in a stuck position
 (maximum number of days of beeing fully invested).
-\item \code{percent_inactive}: The percentag of time the bot was in a stuck position.
+\item \code{percent_inactive}: The percentage of time the bot was in a stuck position.
 That is, all safety orders were filled and the bot was fully invested.
 \item \code{n_stoploss}: The number of stoplosses that had been triggered.
+\item \code{n_emergency_stops}: The number of emergency stops that had been triggered.
 }
-
-If the argument \code{show_trades} is \code{TRUE} a \code{data.frame} with the first few
-trades is returned. This was mainly implemented to check the correctness
-of the trading algorithm.
-
-If the argument \code{plot} is \code{TRUE} an interactive plot showing the changes in
-capital and price of the traded cryptocurrency over time as well as
-performed buy and sell orders and stoplosses.
 }
 \description{
 This function performs a backtest for a single pair martingale trading
@@ -100,14 +101,4 @@ strategy as implemented by single pair dca bots on
 \href{https://tradesanta.com/}{TradeSanta},
 \href{https://www.okx.com/learn/introducing-the-spot-dollar-cost-averaging-dca-bot}{OKX}
 and others. It is mostly written in C++ to maximize speed.
-}
-\examples{
-#Download some price data and perform backtesting
-get_binance_prices_from_csv(
-  'PYRUSDT',
-   start_time = '2025-01-01',
-   end_time = '2025-03-01',
-   progressbar = F
-) |>
-backtest()
 }

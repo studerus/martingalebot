@@ -18,6 +18,7 @@ The `martingalebot` package provides comprehensive tools for downloading cryptoc
 ### 🚀 High-Performance Backtesting
 - **C++ backend**: Core backtesting engine implemented in C++ for maximum speed
 - **Realistic simulation**: Includes trading fees, slippage, and market conditions
+- **Advanced risk management**: Support for Stop Loss, Trailing Take Profit, and external Emergency Stop signals.
 - **Comprehensive metrics**: Profit, drawdown, required capital, and risk measures
 - **Flexible parameters**: Customizable martingale strategy settings
 
@@ -134,6 +135,10 @@ The martingale strategy can be customized with the following parameters:
 | `take_profit` | Profit target (%) | 2.4 |
 | `stepscale` | Price deviation multiplier | 1 |
 | `stoploss` | Stop loss threshold (%) | 0 (disabled) |
+| `trailing_take_profit` | Enable trailing take profit | `FALSE` |
+| `trailing_rate` | Price drop from peak to trigger trailing sell (%) | 0.2 |
+| `use_emergency_stop` | Enable emergency stop signal | `FALSE` |
+
 
 ## Performance Metrics
 
@@ -146,8 +151,44 @@ The package provides comprehensive performance metrics:
 - **Covered deviation**: Price range coverage
 - **Down tolerance**: Resilience to price drops
 - **Time inactive**: Percentage of time fully invested
+- **n_stoploss**: The number of stoplosses that had been triggered
+- **n_emergency_stops**: The number of emergency stops that had been triggered
 
 ## Advanced Features
+
+### Risk Management Features
+
+#### Trailing Take Profit
+A trailing take profit can be used to maximize gains in an uptrend. When `trailing_take_profit = TRUE`, instead of closing the deal at a fixed `take_profit` percentage, the bot will wait for the price to drop by `trailing_rate` from its highest point since the take profit level was first reached.
+
+```r
+# Use a trailing take profit that sells after a 0.5% drop from the peak
+dat |>
+  backtest(
+    trailing_take_profit = TRUE,
+    trailing_rate = 0.005 # 0.5%
+  )
+```
+
+#### Emergency Stop
+The `emergency_stop` feature allows for immediate closure of any open deal based on an external signal. This is useful for reacting to major market events (e.g., high volatility, black swan events). To use it, you must add a logical column named `emergency_stop` to your data and set `use_emergency_stop = TRUE`.
+
+```r
+# Add a custom emergency signal (e.g., based on extreme RSI values)
+data_with_signal <- dat |>
+  add_rsi_filter(
+    n = 14, 
+    time_period = "1 hour", 
+    cutoff = 80, 
+    rsi_is_above = TRUE, # Signal when RSI is ABOVE 80
+    column_name = "emergency_stop"
+  )
+
+# Run backtest using the emergency stop signal
+data_with_signal |>
+  backtest(use_emergency_stop = TRUE)
+```
+
 
 ### Technical Indicators
 
@@ -234,4 +275,4 @@ If you use this package in your research, please cite:
 
 - **Issues**: Report bugs or request features on [GitHub Issues](https://github.com/studerus/martingalebot/issues)
 - **Discussions**: Ask questions in [GitHub Discussions](https://github.com/studerus/martingalebot/discussions)
-- **Email**: Contact the maintainer at erich.studerus@gmail.com 
+- **Email**: Contact the maintainer at erich.studerus@gmail.com
