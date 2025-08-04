@@ -1,10 +1,10 @@
-#' Add an SMA-based deal start filter to a data.table
+#' Add an SMA-based signal filter to a data.table
 #'
 #' @description
 #' This function calculates a Simple Moving Average (SMA) on a resampled time
-#' series and creates a logical `deal_start` column. This column is `TRUE`
-#' whenever the current price is above the SMA of the previous period, indicating
-#' an uptrend. It is designed to be used as a trend filter.
+#' series and creates a logical signal column. The column can be configured to
+#' signal when the price is above the SMA (e.g., for a `deal_start` trend filter)
+#' or below it (e.g., for an `emergency_stop` signal).
 #'
 #' The function modifies the input `data.table` by reference for maximum memory
 #' efficiency.
@@ -14,6 +14,9 @@
 #' @param time_period The time frame for resampling. Defaults to `"1 day"`, which
 #'   is standard for trend-following strategies.
 #' @param n The number of periods for the SMA lookback (e.g., 100 days).
+#' @param column_name The name of the logical column to be created. Defaults to `"deal_start"`.
+#' @param price_is_above If `TRUE` (default), the signal is `TRUE` when price > SMA.
+#'   If `FALSE`, the signal is `TRUE` when price < SMA.
 #'
 #' @return The `data.table` `dt` is returned after being modified in place,
 #'   allowing for use in a `magrittr` pipeline.
@@ -27,7 +30,8 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Download data and add the SMA filter in a single pipeline.
+#' # --- Example 1: Standard Trend Filter ---
+#' # Download data and add the SMA filter for a 'deal_start' signal.
 #' # For a short 1-month period, a shorter SMA (e.g., 10) is more illustrative.
 #' dat <- get_binance_prices_from_csv(
 #'   'PYRUSDT',
@@ -35,17 +39,29 @@
 #'   end_time = '2023-02-28',
 #'   progressbar = FALSE
 #' ) |>
-#'   add_sma_filter(n = 10)
+#'   add_sma_filter(n = 10, column_name = "deal_start", price_is_above = TRUE)
 #'
 #' # Perform backtesting using the new 'deal_start' column
 #' backtest(data = dat, start_asap = FALSE)
+#'
+#' # --- Example 2: Emergency Stop Filter ---
+#' # Reuse 'dat' and add a stop signal for when price drops below the 20-day SMA.
+#' data_with_stop <- dat |>
+#'   add_sma_filter(n = 20, column_name = "emergency_stop", price_is_above = FALSE)
+#'
+#' # Check the last few rows to see the new 'emergency_stop' column
+#' tail(data_with_stop)
 #' }
-add_sma_filter <- function(dt, time_period = "1 day", n = 100) {
+add_sma_filter <- function(dt, time_period = "1 day", n = 100,
+                         column_name = "deal_start", price_is_above = TRUE) {
   # --- Input Validation ---
   stopifnot(data.table::is.data.table(dt))
   if (!"time" %in% names(dt) || !"price" %in% names(dt)) {
     stop("Input 'dt' must contain 'time' and 'price' columns.")
   }
+  stopifnot(is.character(column_name), length(column_name) == 1)
+  stopifnot(is.logical(price_is_above), length(price_is_above) == 1)
+
 
   # --- Configuration ---
   interval_map <- c("3 minutes" = 180, "5 minutes" = 300, "15 minutes" = 900,
@@ -75,8 +91,16 @@ add_sma_filter <- function(dt, time_period = "1 day", n = 100) {
   lookup_table <- resampled_data[!is.na(sma_for_comparison)]
   dt[, sma_temp := lookup_table[dt, on = .(time), roll = TRUE, x.sma_for_comparison]]
 
-  # 5. Create the final 'deal_start' signal by reference.
-  dt[, deal_start := price > sma_temp]
+  # 5. Create the final signal column by reference based on the price_is_above flag.
+  if (price_is_above) {
+    dt[, (column_name) := price > sma_temp]
+  } else {
+    dt[, (column_name) := price < sma_temp]
+  }
+
+  # Replace any resulting NAs with FALSE. This happens at the start of the
+  # series where the indicator is not yet defined.
+  dt[is.na(get(column_name)), (column_name) := FALSE]
 
   # 6. Clean up the temporary column.
   dt[, sma_temp := NULL]

@@ -1,10 +1,10 @@
-#' Add a Bollinger Band based deal start filter to a data.table
+#' Add a flexible Bollinger Band signal filter to a data.table
 #'
 #' @description
 #' This function calculates Bollinger Bands and the corresponding %B indicator on a
-#' resampled time series. It then creates a logical `deal_start` column, which
-#' is `TRUE` when the %B value is below a specified cutoff. A low %B value
-#' suggests the price is "oversold" relative to its recent volatility.
+#' resampled time series. It then creates a logical signal column based on a
+#' cutoff. The signal can be configured to trigger when %B is below the cutoff
+#' (indicating "oversold") or above it (indicating "overbought").
 #'
 #' The function modifies the input `data.table` by reference for maximum memory
 #' efficiency.
@@ -17,9 +17,10 @@
 #'   Bollinger Bands. Defaults to 20.
 #' @param sd The number of standard deviations for the upper and lower bands.
 #'   Defaults to 2.
-#' @param cutoff The %B threshold below which a deal can be started. Defaults to
-#'   0.05 (i.e., when the price is at or below 5% of the band width from the
-#'   lower band).
+#' @param cutoff The %B threshold.
+#' @param column_name The name of the logical column to be created. Defaults to `"deal_start"`.
+#' @param signal_on_below If `TRUE` (default), signal is `TRUE` when %B < cutoff.
+#'   If `FALSE`, signal is `TRUE` when %B > cutoff.
 #'
 #' @return The `data.table` `dt` is returned after being modified in place,
 #'   allowing for use in a `magrittr` pipeline.
@@ -33,24 +34,32 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Download data and add the Bollinger Band %B filter.
+#' # --- Example 1: Standard "Oversold" Deal Start Filter ---
 #' dat <- get_binance_prices_from_csv(
 #'   'PYRUSDT',
 #'   start_time = '2023-02-01',
 #'   end_time = '2023-02-28',
 #'   progressbar = FALSE
 #' ) |>
-#'   add_bollinger_filter(n = 20, cutoff = 0.05)
+#'   add_bollinger_filter(n = 20, cutoff = 0.05, signal_on_below = TRUE)
 #'
-#' # Perform backtesting using the new 'deal_start' column
-#' backtest(data = dat, start_asap = FALSE)
+#' # --- Example 2: "Overbought" Emergency Stop Signal ---
+#' # Use a high cutoff (e.g., 0.95) to signal a stop when price is near the upper band.
+#' data_with_stop <- dat |>
+#'   add_bollinger_filter(
+#'     n = 20, cutoff = 0.95, column_name = "emergency_stop", signal_on_below = FALSE
+#'   )
+#' tail(data_with_stop)
 #' }
-add_bollinger_filter <- function(dt, time_period = "1 hour", n = 20, sd = 2, cutoff = 0.05) {
+add_bollinger_filter <- function(dt, time_period = "1 hour", n = 20, sd = 2, cutoff = 0.05,
+                               column_name = "deal_start", signal_on_below = TRUE) {
   # --- Input Validation ---
   stopifnot(data.table::is.data.table(dt))
   if (!"time" %in% names(dt) || !"price" %in% names(dt)) {
     stop("Input 'dt' must contain 'time' and 'price' columns.")
   }
+  stopifnot(is.character(column_name), length(column_name) == 1)
+  stopifnot(is.logical(signal_on_below), length(signal_on_below) == 1)
 
   # --- Configuration ---
   interval_map <- c("3 minutes" = 180, "5 minutes" = 300, "15 minutes" = 900,
@@ -79,8 +88,15 @@ add_bollinger_filter <- function(dt, time_period = "1 hour", n = 20, sd = 2, cut
   lookup_table <- resampled_data[!is.na(pctB)]
   dt[, pctB_temp := lookup_table[dt, on = .(time), roll = TRUE, x.pctB]]
 
-  # 4. Create the final 'deal_start' signal by reference.
-  dt[, deal_start := pctB_temp < cutoff]
+  # 4. Create the final signal column by reference.
+  if (signal_on_below) {
+    dt[, (column_name) := pctB_temp < cutoff]
+  } else {
+    dt[, (column_name) := pctB_temp > cutoff]
+  }
+
+  # Replace NAs with FALSE.
+  dt[is.na(get(column_name)), (column_name) := FALSE]
 
   # 5. Clean up the temporary column.
   dt[, pctB_temp := NULL]
