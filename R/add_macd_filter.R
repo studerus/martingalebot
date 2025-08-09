@@ -92,8 +92,7 @@ add_macd_filter <- function(dt, time_period = "1 hour", nFast = 12, nSlow = 26, 
   lookup_table <- dt_resampled[, .(time, signal_temp)]
   dt[, (column_name) := lookup_table[dt, on = .(time), roll = TRUE, x.signal_temp]]
 
-  # Replace NAs with FALSE.
-  dt[is.na(get(column_name)), (column_name) := FALSE]
+  # Keep NA values (insufficient history). Backtest will treat NA as FALSE.
 
   # --- Return ---
   # Adding [] resolves printing issues after in-place modifications.

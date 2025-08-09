@@ -57,7 +57,15 @@ List botCfun(double base_order_volume, double first_safety_order_volume,
     }
   }
 
-  down_tolerance = (sum(dev * volume) / sum(volume)) - take_profit;
+  // Compute down_tolerance using weighted-average price per coin logic
+  // tp_over_start = (1 + take_profit/100) * sum(volume) / sum(volume / (1 - dev/100))
+  {
+    NumericVector one_minus_dev = (100.0 - dev) / 100.0;
+    double sum_volume = sum(volume);
+    double denom = sum(volume / one_minus_dev);
+    double tp_over_start = ((100.0 + take_profit) / 100.0) * (sum_volume / denom);
+    down_tolerance = 100.0 * (1.0 - tp_over_start);
+  }
   buy_price_factor = (100.0 - dev) / 100.0;
   const double take_profit_factor = (100.0 + take_profit) / 100.0;
 
@@ -69,7 +77,11 @@ List botCfun(double base_order_volume, double first_safety_order_volume,
   
   NumericVector cum_proportion = cumsum(proportion);
   NumericVector cum_volume = cumsum(volume);
-  avg_price = NumericVector(cumsum(buy_price_factor * volume)) / cum_volume;
+  // Average buy price factor relative to base order price must be
+  // sum(volume) / sum(volume / buy_price_factor) (harmonic weighting),
+  // not the arithmetic average of buy_price_factor.
+  NumericVector cum_denom = cumsum(volume / buy_price_factor);
+  avg_price = cum_volume / cum_denom; // factor relative to base order price
   required_change = avg_price * take_profit_factor;
 
   // --- DataFrame for trades ---

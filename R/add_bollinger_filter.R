@@ -95,8 +95,7 @@ add_bollinger_filter <- function(dt, time_period = "1 hour", n = 20, sd = 2, cut
     dt[, (column_name) := pctB_temp > cutoff]
   }
 
-  # Replace NAs with FALSE.
-  dt[is.na(get(column_name)), (column_name) := FALSE]
+  # Keep NA values where pctB is NA; backtest will treat NAs as FALSE.
 
   # 5. Clean up the temporary column.
   dt[, pctB_temp := NULL]

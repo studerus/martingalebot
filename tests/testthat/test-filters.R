@@ -28,7 +28,7 @@ test_that("add_sma_filter handles insufficient data", {
   
   result <- add_sma_filter(test_data, time_period = "1 day", n = 5)
   
-  # Should add deal_start column with all NA values
+  # Should add deal_start column with all NA values when insufficient data
   expect_true("deal_start" %in% names(result))
   expect_true(all(is.na(result$deal_start)))
 })

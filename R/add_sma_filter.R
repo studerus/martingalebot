@@ -98,10 +98,6 @@ add_sma_filter <- function(dt, time_period = "1 day", n = 100,
     dt[, (column_name) := price < sma_temp]
   }
 
-  # Replace any resulting NAs with FALSE. This happens at the start of the
-  # series where the indicator is not yet defined.
-  dt[is.na(get(column_name)), (column_name) := FALSE]
-
   # 6. Clean up the temporary column.
   dt[, sma_temp := NULL]
 

@@ -95,8 +95,7 @@ add_rsi_filter <- function(dt, time_period = "1 hour", n = 7, cutoff = 30,
     dt[, (column_name) := RSI_temp < cutoff]
   }
 
-  # Clean up and handle NAs
-  dt[is.na(get(column_name)), (column_name) := FALSE]
+  # Keep NAs for upstream logic; backtest will treat NAs as FALSE
   dt[, RSI_temp := NULL]
 
   # --- Return ---
