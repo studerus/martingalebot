@@ -2,9 +2,15 @@
 % Please edit documentation in R/add_sma_filter.R
 \name{add_sma_filter}
 \alias{add_sma_filter}
-\title{Add an SMA-based deal start filter to a data.table}
+\title{Add an SMA-based signal filter to a data.table}
 \usage{
-add_sma_filter(dt, time_period = "1 day", n = 100)
+add_sma_filter(
+  dt,
+  time_period = "1 day",
+  n = 100,
+  column_name = "deal_start",
+  price_is_above = TRUE
+)
 }
 \arguments{
 \item{dt}{A \code{data.table} containing 'time' and 'price' columns. The function
@@ -14,6 +20,11 @@ assumes the data is already sorted by time.}
 is standard for trend-following strategies.}
 
 \item{n}{The number of periods for the SMA lookback (e.g., 100 days).}
+
+\item{column_name}{The name of the logical column to be created. Defaults to \code{"deal_start"}.}
+
+\item{price_is_above}{If \code{TRUE} (default), the signal is \code{TRUE} when price > SMA.
+If \code{FALSE}, the signal is \code{TRUE} when price < SMA.}
 }
 \value{
 The \code{data.table} \code{dt} is returned after being modified in place,
@@ -21,16 +32,17 @@ allowing for use in a \code{magrittr} pipeline.
 }
 \description{
 This function calculates a Simple Moving Average (SMA) on a resampled time
-series and creates a logical \code{deal_start} column. This column is \code{TRUE}
-whenever the current price is above the SMA of the previous period, indicating
-an uptrend. It is designed to be used as a trend filter.
+series and creates a logical signal column. The column can be configured to
+signal when the price is above the SMA (e.g., for a \code{deal_start} trend filter)
+or below it (e.g., for an \code{emergency_stop} signal).
 
 The function modifies the input \code{data.table} by reference for maximum memory
 efficiency.
 }
 \examples{
 \dontrun{
-# Download data and add the SMA filter in a single pipeline.
+# --- Example 1: Standard Trend Filter ---
+# Download data and add the SMA filter for a 'deal_start' signal.
 # For a short 1-month period, a shorter SMA (e.g., 10) is more illustrative.
 dat <- get_binance_prices_from_csv(
   'PYRUSDT',
@@ -38,10 +50,18 @@ dat <- get_binance_prices_from_csv(
   end_time = '2023-02-28',
   progressbar = FALSE
 ) |>
-  add_sma_filter(n = 10)
+  add_sma_filter(n = 10, column_name = "deal_start", price_is_above = TRUE)
 
 # Perform backtesting using the new 'deal_start' column
 backtest(data = dat, start_asap = FALSE)
+
+# --- Example 2: Emergency Stop Filter ---
+# Reuse 'dat' and add a stop signal for when price drops below the 20-day SMA.
+data_with_stop <- dat |>
+  add_sma_filter(n = 20, column_name = "emergency_stop", price_is_above = FALSE)
+
+# Check the last few rows to see the new 'emergency_stop' column
+tail(data_with_stop)
 }
 }
 \seealso{

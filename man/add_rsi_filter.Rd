@@ -16,7 +16,7 @@ add_rsi_filter(
 \arguments{
 \item{dt}{A \code{data.table} containing 'time' and 'price' columns.}
 
-\item{time_period}{The time frame for resampling, e.g., "1 hour", "15 minutes".}
+\item{time_period}{The time frame for resampling, e.g., "1 hour", "1 day", "1 week".}
 
 \item{n}{The number of periods for the RSI calculation.}
 
@@ -34,8 +34,43 @@ The \code{data.table} \code{dt} is returned after being modified in place.
 This function calculates the Relative Strength Index (RSI) on a resampled
 time series and creates a logical column based on a cutoff. It can be used
 to create \code{deal_start} signals (e.g., RSI is low, indicating oversold) or
-\code{emergency_stop} signals (e.g., RSI is high, indicating overbought).
+\code{emergency_stop} signals (e.g., a weekly RSI indicates a bear market).
 
 The function modifies the input \code{data.table} by reference for maximum memory
 efficiency.
+}
+\examples{
+\dontrun{
+# --- Example 1: Standard "Oversold" Deal Start on 4-hour chart ---
+dat <- get_binance_prices_from_csv(
+  'ATOMUSDT',
+  start_time = '2022-01-01',
+  end_time = '2022-06-30',
+  progressbar = FALSE
+) |>
+  add_rsi_filter(
+    time_period = "4 hours", n = 14, cutoff = 30, rsi_is_above = FALSE
+  )
+
+# --- Example 2: Weekly RSI for long-term Emergency Stop ---
+# A weekly RSI breaking below 40 can be a sign of a bear market.
+data_with_stop <- get_binance_prices_from_csv(
+  'BTCUSDT',
+  start_time = '2020-01-01',
+  end_time = '2022-12-31',
+  progressbar = FALSE
+) |>
+  add_rsi_filter(
+    time_period = "1 week",
+    n = 14,
+    cutoff = 40,
+    column_name = "emergency_stop",
+    rsi_is_above = FALSE
+  )
+
+print(data_with_stop[emergency_stop == TRUE])
+}
+}
+\seealso{
+\code{\link{add_sma_filter}}, \code{\link{add_bollinger_filter}}, \code{\link{add_macd_filter}}
 }

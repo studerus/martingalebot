@@ -2,9 +2,17 @@
 % Please edit documentation in R/add_macd_filter.R
 \name{add_macd_filter}
 \alias{add_macd_filter}
-\title{Add a MACD-based deal start filter to a data.table}
+\title{Add a flexible MACD-based signal filter to a data.table}
 \usage{
-add_macd_filter(dt, time_period = "1 hour", nFast = 12, nSlow = 26, nSig = 9)
+add_macd_filter(
+  dt,
+  time_period = "1 hour",
+  nFast = 12,
+  nSlow = 26,
+  nSig = 9,
+  column_name = "deal_start",
+  macd_is_above_signal = TRUE
+)
 }
 \arguments{
 \item{dt}{A \code{data.table} containing 'time' and 'price' columns, sorted by time.}
@@ -16,6 +24,11 @@ add_macd_filter(dt, time_period = "1 hour", nFast = 12, nSlow = 26, nSig = 9)
 \item{nSlow}{The number of periods for the slow moving average.}
 
 \item{nSig}{The number of periods for the signal line moving average.}
+
+\item{column_name}{The name of the logical column to be created. Defaults to \code{"deal_start"}.}
+
+\item{macd_is_above_signal}{If \code{TRUE} (default), the signal is \code{TRUE} on a bullish
+crossover (macd > signal). If \code{FALSE}, it's \code{TRUE} on a bearish crossover (macd < signal).}
 }
 \value{
 The \code{data.table} \code{dt} is returned after being modified in place,
@@ -23,27 +36,32 @@ allowing for use in a \code{magrittr} pipeline.
 }
 \description{
 This function calculates the Moving Average Convergence Divergence (MACD) on a
-resampled time series (e.g., hourly) and then maps the signals back to the
-original high-frequency data. It creates a logical \code{deal_start} column which is
-\code{TRUE} when the MACD line is above its signal line, a common buy signal.
-This prepares the data for use with \code{backtest(..., start_asap = FALSE)}.
+resampled time series and creates a logical signal column. It can be configured
+to signal a bullish crossover (MACD line crosses above its signal line) or a
+bearish crossover (MACD line crosses below its signal line).
 
 The function modifies the input \code{data.table} by reference for maximum memory
 efficiency.
 }
 \examples{
 \dontrun{
-# Download data and add the MACD filter in a single pipeline.
+# --- Example 1: Standard Bullish Crossover for Deal Start ---
 dat <- get_binance_prices_from_csv(
   'PYRUSDT',
   start_time = '2023-02-01',
   end_time = '2023-02-28',
   progressbar = FALSE
 ) |>
-  add_macd_filter(time_period = "1 hour")
+  add_macd_filter(time_period = "1 hour", macd_is_above_signal = TRUE)
 
-# Perform backtesting using the new 'deal_start' column
-backtest(data = dat, start_asap = FALSE)
+# --- Example 2: Bearish Crossover for Emergency Stop ---
+data_with_stop <- dat |>
+  add_macd_filter(
+    time_period = "4 hour",
+    column_name = "emergency_stop",
+    macd_is_above_signal = FALSE
+  )
+tail(data_with_stop)
 }
 }
 \seealso{

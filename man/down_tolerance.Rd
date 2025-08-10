@@ -38,10 +38,25 @@ by the last safety order be multiplied?}
 a numeric vector of price down tolerances
 }
 \description{
-This function calculates the "price down tolerance" (i.e. the percentage
+This function calculates the price down tolerance, i.e. the percentage
 price deviation from the initial order price to the take profit price when
-all safety orders are filled) for a specific parameter setting. This function
-is vectorized. So, you can also apply it to vectors of parameters.
+all safety orders are filled.
+}
+\details{
+Implementation detail: The calculation uses the weighted-average purchase
+price per coin (WAP). If \eqn{V_i} are the order sizes in quote currency and
+the order prices are \eqn{P_i = P_0 (1 - d_i/100)}, then the average cost per
+coin is
+\deqn{\bar P = \frac{\sum_i V_i}{\sum_i V_i / P_i}.}
+The take profit price is
+\deqn{P_{TP} = \bar P\, (1 + \mathrm{take\_profit}/100).}
+Since \eqn{P_i} are proportional to \eqn{P_0}, the ratio simplifies to
+\deqn{\frac{P_{TP}}{P_0} = (1 + \mathrm{take\_profit}/100)\, \frac{\sum_i V_i}{\sum_i V_i / (1 - d_i/100)}.}
+Therefore, the down tolerance (percentage drop from start price to TP price) is
+\deqn{100\,\left(1 - \frac{P_{TP}}{P_0}\right) = 100\,\left(1 - (1 + \mathrm{take\_profit}/100)\, \frac{\sum_i V_i}{\sum_i V_i / (1 - d_i/100)}\right).}
+
+This matches the intuitive definition and the visualization used in
+\code{plot_martingale_config(plot_type = "allocation")}.
 }
 \examples{
 down_tolerance(base_order_volume = 10, first_safety_order_volume = 10,

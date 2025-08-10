@@ -79,6 +79,37 @@ shows a progress bar. Currently, the functions `backtest` and
 `grid_search` are implemented in such a way that they expect the price
 data to be in the format as returned by this function.
 
+
+### Visualizing a Martingale Configuration
+
+Before running scans, you can quickly inspect how a parameter set allocates capital across safety orders, where orders are placed, and where the take‑profit lands.
+
+```{r, dev='svg', out.width='100%', fig.width=8, fig.asp=0.6, fig.align='center'}
+# Capital allocation by price level (horizontal stacked bars)
+plot_martingale_config(
+  starting_price = 100,
+  n_safety_orders = 8,
+  pricescale = 2.4,
+  volumescale = 1.5,
+  take_profit = 2.4,
+  stepscale = 1.1, 
+  plot_type = "allocation"
+)
+```
+
+```{r, dev='svg', out.width='100%', fig.width=8, fig.asp=0.6, fig.align='center'}
+# Timeline view (order sequence with buy amounts and final TP point)
+plot_martingale_config(
+  starting_price = 100,
+  n_safety_orders = 8,
+  pricescale = 2.4,
+  volumescale = 1.5,
+  take_profit = 2.4,
+  stepscale = 1.1,
+  plot_type = "timeline"
+)
+```
+
 ### Performing a backtest
 
 To perform a backtest of a martingale bot, we first download price data
@@ -113,6 +144,12 @@ tested martingale bot can be set up with the following parameters:
 -   `start_asap`: Should new deals be started immediately after the
     previous deal was closed. If set to `FALSE` new deals are only
     started where the logical vector `deal_start` in `data` is `TRUE`.
+
+-   `use_emergency_stop`: Whether to honor an external emergency stop
+    signal during backtesting. If set to `TRUE`, the logical column
+    `emergency_stop` in `data` (if present) will immediately close any
+    open deal when it becomes `TRUE` and prevent new deals while it is
+    `TRUE`.
 
 If we don't specify any of these arguments, the default parameter
 settings will be used. To show the default settings, type
@@ -153,6 +190,9 @@ The backtest function returns the following measures:
     fully invested.
 
 -   `n_stoploss`: The number of stop-losses that had been triggered.
+ 
+ -   `n_emergency_stops`: The number of emergency stops that had been triggered
+     due to the `emergency_stop` signal when `use_emergency_stop = TRUE`.
 
 If the argument `plot` is `TRUE`, an interactive plot showing the
 changes in capital and price of the traded cryptocurrency over time is
@@ -190,6 +230,102 @@ dat |>
   add_rsi_filter(time_period = "1 hour", n = 7, cutoff = 30) |>
   backtest(start_asap = FALSE, plot = TRUE)
 ```
+
+Other useful deal-start filters provided by the package:
+
+- SMA Trend Filter (trend-following; avoids buying in downtrends). Signals when price is above a long SMA.
+
+```{r}
+dat |>
+  add_sma_filter(n = 100, column_name = "deal_start", price_is_above = TRUE) |>
+  backtest(start_asap = FALSE)
+```
+
+- Bollinger %B Oversold (mean reversion; buys local dips within a regime). Triggers when price is near the lower band.
+
+```{r}
+dat |>
+  add_bollinger_filter(time_period = "1 hour", n = 20, cutoff = 0.10,
+                       column_name = "deal_start", signal_on_below = TRUE) |>
+  backtest(start_asap = FALSE)
+```
+
+- MACD Bullish Crossover (momentum/confirmation; enters on a momentum turn).
+
+```{r}
+dat |>
+  add_macd_filter(time_period = "4 hours", column_name = "deal_start",
+                  macd_is_above_signal = TRUE) |>
+  backtest(start_asap = FALSE)
+```
+
+- Regime + Entry (robust approach; only buy dips inside a higher-timeframe bull regime). Example: weekly RSI regime AND 4h dip.
+
+```{r}
+dat_regime <- dat |>
+  add_rsi_filter(time_period = "1 week", n = 14, cutoff = 40,
+                 column_name = "is_bull_regime", rsi_is_above = FALSE) |>
+  add_rsi_filter(time_period = "4 hours", n = 14, cutoff = 30,
+                 column_name = "is_dip", rsi_is_above = FALSE)
+
+dat_regime[, deal_start := is_bull_regime & is_dip]
+dat_regime |>
+  backtest(start_asap = FALSE)
+```
+
+
+### Emergency Stop Conditions
+
+Emergency stops are rare, high-conviction exit signals to protect the bot from regime changes (e.g., start of a bear market) or extreme momentum down moves. The following helpers produce a logical column named `emergency_stop` that `backtest(..., use_emergency_stop = TRUE)` will honor.
+
+- Weekly RSI breakdown (regime filter; closes deals when long-term momentum turns bearish).
+
+```{r}
+dat |>
+  add_rsi_filter(time_period = "1 week", n = 14, cutoff = 40,
+                 column_name = "emergency_stop", rsi_is_above = FALSE) |>
+  backtest(use_emergency_stop = TRUE)
+```
+
+- Death Cross (confirmation of trend reversal; short SMA crosses below long SMA on daily data).
+
+```{r}
+dat |>
+  add_death_cross_filter(column_name = "emergency_stop") |>
+  backtest(use_emergency_stop = TRUE)
+```
+
+- Rate of Change (ROC) crash (downside momentum; triggers on strong multi-week drawdowns). You can smooth inputs to avoid wick/noise.
+
+```{r}
+dat |>
+  add_roc_filter(time_period = "1 day", n = 90, cutoff = -30,
+                 smoothing_period = 7, column_name = "emergency_stop",
+                 roc_is_below = TRUE) |>
+  backtest(use_emergency_stop = TRUE)
+```
+
+- SMA breakdown (simpler regime guard; closes when price falls below a long SMA).
+
+```{r}
+dat |>
+  add_sma_filter(n = 200, column_name = "emergency_stop", price_is_above = FALSE) |>
+  backtest(use_emergency_stop = TRUE)
+```
+
+- Bollinger %B overbought clamp (euphoria exit; stop when price hugs upper band). Useful to avoid buying into blow-off tops or to defensively close.
+
+```{r}
+dat |>
+  add_bollinger_filter(time_period = "1 day", n = 20, cutoff = 0.95,
+                       column_name = "emergency_stop", signal_on_below = FALSE) |>
+  backtest(use_emergency_stop = TRUE)
+```
+
+Notes:
+- Emergency stops should be infrequent; prefer higher timeframes and conservative thresholds.
+- You can combine multiple stops by OR‑condition, e.g.`dat[, emergency_stop := stop1 | stop2]`.
+- Emergency stops are displayed as purple dots in the plot.
 
 ### Parameter optimization
 
@@ -263,85 +399,93 @@ drops. In this case, it would be a waste of computation time if we
 tested all possible combinations of parameters.
 
 Instead of performing a grid search, we can also search for the best
-parameter combination with optimization algorithms. For example, we
-could use a technique called Simulated Annealing:
+parameter combination with built-in optimization helpers.
 
-```{r}
-library(optimization)
+### Differential Evolution (DE)
 
-#Define the optimization function:
-optim_fun <- function(x) {
-      y <- dat |>
-        backtest(n_safety_orders = x[1], pricescale = x[2],
-                 volumescale = x[3], take_profit = x[4], stepscale = x[5])
-      #Note that we return minus the profit because the optimization algorithm
-      #expects a value that we want to reduce as much as possible
-      - y$profit
-}
+```{r, warning=FALSE}
+# Optimize for profit using Differential Evolution
+best_de <- de_search(
+  data = dat,
+  objective_metric = "profit",
+  DEoptim_control = list(itermax = 50, NP = 64, trace = FALSE)
+)
 
-#Define lower and upper bound and start values of parameters
-lower <- c(6, 1, 1, 1, 0.8)
-upper <- c(16, 3.5, 2, 3.5, 1.1)
-start <- c(8, 2.4, 1.5, 2.4, 1)
+best_de
 
-#Perform optimization
-res <- optim_sa(optim_fun, start = start, lower = lower, upper = upper,
-                control = list(nlimit = 200))$par
-
-#Plot the best parameter combination found by the optimization algorithm:
-dat |>
-  backtest(n_safety_orders = round(res[1]), pricescale = res[2],
-           volumescale = res[3], take_profit = res[4], stepscale = res[5],
-           plot = TRUE)
+# Plot the best configuration found by DE
+best_de %>% exec(backtest, !!!., data = dat, plot = TRUE)
 ```
 
-Instead of optimizing the profit, we could also optimize another
-criterion. For example, we could seek for the best compromise between
-`profit`, `max_draw_down`, `percent_inactive`, and `down_tolerance` by
-defining the optimization function like this:
+You can also optimize a custom metric, e.g. a simple risk-adjusted target:
 
-```{r}
-optim_fun <- function(x) {
-      dat |>
-        backtest(n_safety_orders = x[1], pricescale = x[2],
-                 volumescale = x[3], take_profit = x[4], stepscale = x[5]) |>
-        with(max_draw_down + percent_inactive - down_tolerance - profit)
-}
+```{r, warning=FALSE}
+best_de_custom <- de_search(
+  data = dat,
+  objective_metric = "profit / (1 + max_draw_down)",
+  DEoptim_control = list(itermax = 40, NP = 48, trace = FALSE)
+)
+best_de_custom
 ```
 
-Here, all measures are weighted equally. However, we could also give
-them different weights by multiplying them with different numbers or we
-could apply various transformation functions to them.
+### Random Search (Latin Hypercube Sampling)
 
-We could also perform an optimization using the genetic algorithm from
-package `GA`. Here's an example:
+```{r}
+# Random search to explore the space broadly
+rand <- random_search(
+  data = dat,
+  n_samples = 200,
+  progressbar = FALSE
+)
 
-```{r, message=FALSE}
-library(GA)
+# Inspect top candidates
+rand %>% 
+  dplyr::slice_max(profit, n = 5)
 
-#Define the optimization function:
-optim_fun <- function(x) {
-      y <- dat |>
-        backtest(n_safety_orders = x[1], pricescale = x[2],
-                 volumescale = x[3], take_profit = x[4], stepscale = x[5])
-      #Note that this algorithm expects a value that we want to increase as much
-      #as possible. Therefore, we return the positive profit here:
-      y$profit
-}
+# Plot the best one
+rand %>%
+  dplyr::slice_max(profit, n = 1) %>%
+  exec(backtest, !!!., data = dat, plot = TRUE)
+```
 
-#Define lower and upper bound of parameters
-lower <- c(6, 1, 1, 1, 0.8)
-upper <- c(16, 3.5, 2, 3.5, 1.1)
+### Setting Parameter Ranges
 
-#Perform optimization
-res <- ga(type = 'real-valued', optim_fun, lower = lower,
-          upper = upper, maxiter = 200)@solution
+You can restrict the search space by providing lower/upper bounds (DE) or ranges (random search).
 
-#Plot the best parameter combination found by the optimization algorithm:
-dat |>
-  backtest(n_safety_orders = round(res[1]), pricescale = res[2],
-           volumescale = res[3], take_profit = res[4], stepscale = res[5],
-           plot = TRUE)
+```{r, warning=F}
+# Differential Evolution with custom bounds
+best_de_bounds <- de_search(
+  data = dat,
+  objective_metric = "profit",
+  n_safety_orders_bounds = c(6, 14),
+  pricescale_bounds      = c(1.2, 3.2),
+  volumescale_bounds     = c(1.0, 2.0),
+  take_profit_bounds     = c(1.0, 3.0),
+  stepscale_bounds       = c(0.8, 1.2),
+  stoploss_bounds        = c(0, 40),
+  base_order_volume_bounds         = c(10, 50),
+  first_safety_order_volume_bounds = c(10, 50),
+  DEoptim_control = list(itermax = 40, NP = 48, trace = FALSE)
+)
+best_de_bounds
+
+# Random search with matching ranges and pre-filters
+rand_bounds <- random_search(
+  data = dat,
+  n_samples = 200,
+  n_safety_orders_bounds = c(6, 14),
+  pricescale_bounds      = c(1.2, 3.2),
+  volumescale_bounds     = c(1.0, 2.0),
+  take_profit_bounds     = c(1.0, 3.0),
+  stepscale_bounds       = c(0.8, 1.2),
+  stoploss_values        = c(0, 25, 30, 40),
+  min_covered_deviation  = 8,
+  min_down_tolerance     = 8,
+  max_required_capital   = 10000,
+  progressbar = FALSE
+)
+rand_bounds %>%
+  dplyr::slice_max(profit, n = 1)
 ```
 
 ### Cross-validation
@@ -397,7 +541,7 @@ the final performance in the test data.
 library(tidyverse)
 slices %>% 
   group_by(start_test, end_test) %>% 
-  summarise({
+  reframe({
     # Get test and training data of the present row / iteration
     train_data <- filter(dat, between(time, start_train, end_train))
     test_data <- filter(dat, between(time, start_test, end_test))
@@ -406,7 +550,7 @@ slices %>%
       grid_search(progressbar = FALSE) |>
       slice(1)
     # Apply this parameter combination to the test data
-    exec(backtest, !!!best, data = test_data)
+    pmap_df(best, backtest, data = test_data)
   })
 ```
 
@@ -426,13 +570,13 @@ using the argument `min_down_tolerance` of the `grid_search` function:
 library(tidyverse)
 slices %>% 
   group_by(start_test, end_test) %>% 
-  summarise({
+  reframe({
     train_data <- filter(dat, between(time, start_train, end_train))
     test_data <- filter(dat, between(time, start_test, end_test))
     best <- train_data |>
       grid_search(min_down_tolerance = 12, progressbar = FALSE) |>
       slice(1)
-    exec(backtest, !!!best, data = test_data)
+    pmap_df(best, backtest, data = test_data)
   })
 ```
 
@@ -451,14 +595,14 @@ than 3% of the time fully invested in the training period, we could do:
 library(tidyverse)
 slices %>% 
   group_by(start_test, end_test) %>% 
-  summarise({
+  reframe({
     train_data <- filter(dat, between(time, start_train, end_train))
     test_data <- filter(dat, between(time, start_test, end_test))
     best <- train_data |>
       grid_search(progressbar = FALSE) |>
       filter(max_draw_down < 30 & percent_inactive < 3) |>
       slice(1)
-    exec(backtest, !!!best, data = test_data)
+    pmap_df(best, backtest, data = test_data)
   })
 ```
 
@@ -470,82 +614,36 @@ maximizes a combination of measures, such as
 library(tidyverse)
 slices %>% 
   group_by(start_test, end_test) %>% 
-  summarise({
+  reframe({
     train_data <- filter(dat, between(time, start_train, end_train))
     test_data <- filter(dat, between(time, start_test, end_test))
     best <- train_data |>
       grid_search(progressbar = FALSE) |>
       slice_max(profit - max_draw_down - percent_inactive)
-    exec(backtest, !!!best, data = test_data)
+    pmap_df(best, backtest, data = test_data)
   })
 ```
 
-Instead of performing a grid search, we could also search for the best
-parameter combination using an optimiziation algorithm, such as
-simulated annealing:
+Instead of performing a grid search, we can also run cross‑validation with Differential Evolution (DE) using the built‑in helper:
 
 ```{r, message = F}
 library(tidyverse)
 slices %>% 
   group_by(start_test, end_test) %>% 
-  summarise({
+  reframe({
+    # Split present fold
     train_data <- filter(dat, between(time, start_train, end_train))
-    test_data <- filter(dat, between(time, start_test, end_test))
-    
-    #Define the optimization function:
-    optim_fun <- function(x) {
-      train_data |>
-        backtest(n_safety_orders = x[1], pricescale = x[2],
-                 volumescale = x[3], take_profit = x[4], stepscale = x[5]) |>
-        #Note that we have to change signs here as compared to above
-        with(-profit + max_draw_down + percent_inactive)
-    }
+    test_data  <- filter(dat, between(time, start_test,  end_test))
 
-    #Define lower and upper bound and start values of parameters
-    lower <- c(6, 1, 1, 1, 0.8)
-    upper <- c(16, 3.5, 2, 3.5, 1.1)
-    start <- c(8, 2.4, 1.5, 2.4, 1)
+    # Optimize on training set
+    best <- de_search(
+      data = train_data,
+      objective_metric = "profit / (1 + max_draw_down)",
+      # keep runtime reasonable for vignette
+      DEoptim_control = list(itermax = 30, NP = 48, trace = FALSE)
+    )
 
-    #Perform optimization
-    res <- optim_sa(optim_fun, start = start, lower = lower, upper = upper,
-                    control = list(nlimit = 200))$par
-
-    #Apply best parameter combination to test data
-    test_data |>
-      backtest(n_safety_orders = round(res[1]), pricescale = res[2],
-               volumescale = res[3], take_profit = res[4], stepscale = res[5])
-  })
-```
-
-Similarly, we could apply the genetic algorithm from package `GA`:
-
-```{r, message = F}
-library(tidyverse)
-slices %>% 
-  group_by(start_test, end_test) %>% 
-  summarise({
-    train_data <- filter(dat, between(time, start_train, end_train))
-    test_data <- filter(dat, between(time, start_test, end_test))
-    
-    #Define the optimization function:
-    optim_fun <- function(x) {
-      train_data |>
-        backtest(n_safety_orders = x[1], pricescale = x[2],
-                 volumescale = x[3], take_profit = x[4], stepscale = x[5]) |>
-        with(profit - max_draw_down - percent_inactive)
-    }
-
-    #Define lower and upper bound of parameters
-    lower <- c(6, 1, 1, 1, 0.8)
-    upper <- c(16, 3.5, 2, 3.5, 1.1)
-
-    #Perform optimization
-    res <- ga(type = 'real-valued', optim_fun, lower = lower,
-              upper = upper, maxiter = 200, monitor = F)@solution
-
-    #Apply best parameter combination to test data
-    test_data |>
-      backtest(n_safety_orders = round(res[1]), pricescale = res[2],
-               volumescale = res[3], take_profit = res[4], stepscale = res[5])
+    # Evaluate on test set
+    pmap_df(best, backtest, data = test_data)
   })
 ```

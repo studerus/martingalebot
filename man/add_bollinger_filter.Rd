@@ -2,9 +2,17 @@
 % Please edit documentation in R/add_bollinger_filter.R
 \name{add_bollinger_filter}
 \alias{add_bollinger_filter}
-\title{Add a Bollinger Band based deal start filter to a data.table}
+\title{Add a flexible Bollinger Band signal filter to a data.table}
 \usage{
-add_bollinger_filter(dt, time_period = "1 hour", n = 20, sd = 2, cutoff = 0.05)
+add_bollinger_filter(
+  dt,
+  time_period = "1 hour",
+  n = 20,
+  sd = 2,
+  cutoff = 0.05,
+  column_name = "deal_start",
+  signal_on_below = TRUE
+)
 }
 \arguments{
 \item{dt}{A \code{data.table} containing 'time' and 'price' columns. The function
@@ -19,9 +27,12 @@ Bollinger Bands. Defaults to 20.}
 \item{sd}{The number of standard deviations for the upper and lower bands.
 Defaults to 2.}
 
-\item{cutoff}{The \%B threshold below which a deal can be started. Defaults to
-0.05 (i.e., when the price is at or below 5\% of the band width from the
-lower band).}
+\item{cutoff}{The \%B threshold.}
+
+\item{column_name}{The name of the logical column to be created. Defaults to \code{"deal_start"}.}
+
+\item{signal_on_below}{If \code{TRUE} (default), signal is \code{TRUE} when \%B < cutoff.
+If \code{FALSE}, signal is \code{TRUE} when \%B > cutoff.}
 }
 \value{
 The \code{data.table} \code{dt} is returned after being modified in place,
@@ -29,26 +40,31 @@ allowing for use in a \code{magrittr} pipeline.
 }
 \description{
 This function calculates Bollinger Bands and the corresponding \%B indicator on a
-resampled time series. It then creates a logical \code{deal_start} column, which
-is \code{TRUE} when the \%B value is below a specified cutoff. A low \%B value
-suggests the price is "oversold" relative to its recent volatility.
+resampled time series. It then creates a logical signal column based on a
+cutoff. The signal can be configured to trigger when \%B is below the cutoff
+(indicating "oversold") or above it (indicating "overbought").
 
 The function modifies the input \code{data.table} by reference for maximum memory
 efficiency.
 }
 \examples{
 \dontrun{
-# Download data and add the Bollinger Band \%B filter.
+# --- Example 1: Standard "Oversold" Deal Start Filter ---
 dat <- get_binance_prices_from_csv(
   'PYRUSDT',
   start_time = '2023-02-01',
   end_time = '2023-02-28',
   progressbar = FALSE
 ) |>
-  add_bollinger_filter(n = 20, cutoff = 0.05)
+  add_bollinger_filter(n = 20, cutoff = 0.05, signal_on_below = TRUE)
 
-# Perform backtesting using the new 'deal_start' column
-backtest(data = dat, start_asap = FALSE)
+# --- Example 2: "Overbought" Emergency Stop Signal ---
+# Use a high cutoff (e.g., 0.95) to signal a stop when price is near the upper band.
+data_with_stop <- dat |>
+  add_bollinger_filter(
+    n = 20, cutoff = 0.95, column_name = "emergency_stop", signal_on_below = FALSE
+  )
+tail(data_with_stop)
 }
 }
 \seealso{

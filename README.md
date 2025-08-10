@@ -201,32 +201,39 @@ dat |>
   backtest(start_asap = FALSE)
 ```
 
-### Optimization Algorithms
+### Optimization with Differential Evolution
 
 ```r
-# Genetic Algorithm optimization
-library(GA)
-
-optimize_function <- function(params) {
-  # The GA passes an unnamed vector, so we assign names for backtest
-  names(params) <- c("n_safety_orders", "pricescale", "take_profit")
-  
-  result <- dat |>
-    backtest(
-      n_safety_orders = params["n_safety_orders"],
-      pricescale = params["pricescale"],
-      take_profit = params["take_profit"]
-    )
-  return(result$profit)
-}
-
-ga_result <- ga(
-  type = "real-valued",
-  fitness = optimize_function,
-  lower = c(6, 1.5, 1.0),
-  upper = c(12, 3.5, 3.0),
-  maxiter = 100
+# Differential Evolution optimization (built-in)
+best <- de_search(
+  data = dat,
+  objective_metric = "profit",            # or any expression using backtest columns
+  DEoptim_control = list(itermax = 50, NP = 64, trace = FALSE)
 )
+
+print(best)
+
+# Plot the best configuration
+best %>% exec(backtest, !!!., data = dat, plot = TRUE)
+```
+
+### Random Search (Latin Hypercube Sampling)
+
+```r
+# Explore the parameter space with Latin Hypercube Sampling
+rand <- random_search(
+  data = dat,
+  n_samples = 200,                  # number of random configs
+  progressbar = FALSE               # set TRUE in interactive sessions
+)
+
+# Inspect top candidates
+rand %>% dplyr::slice_max(profit, n = 5)
+
+# Plot the best random configuration
+rand %>%
+  dplyr::slice_max(profit, n = 1) %>%
+  exec(backtest, !!!., data = dat, plot = TRUE)
 ```
 
 ## Documentation
@@ -264,7 +271,7 @@ If you use this package in your research, please cite:
 ```
 @Manual{,
   title = {martingalebot: Martingale Trading Strategy Backtesting},
-  author = {[Author Name]},
+  author = {[Erich Studerus]},
   year = {2025},
   note = {R package version 0.1.0},
   url = {https://github.com/studerus/martingalebot},
